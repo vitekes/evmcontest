@@ -18,7 +18,7 @@ contract Giveaways is ReentrancyGuard{
 
         bool    active;
     }
-    uint64  public id;
+    uint64 public id;
     IPayment payment;
     address payable public owner;
     mapping (uint64 => Giveaway) giveaways;
@@ -153,7 +153,9 @@ contract Giveaways is ReentrancyGuard{
             _page = 0;
         }
         _gw = new Giveaway[](_amount);
-        for(uint64 i=_page * _amount; i<_amount;i++){
+        uint64 from = _page * _amount;
+        uint64 to = (_page + 1) * _amount;
+        for(uint64 i=from; i<to;i++){
             Giveaway memory item = giveaways[i];
             _gw[i] = item;
         }
