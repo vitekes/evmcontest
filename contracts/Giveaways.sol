@@ -161,6 +161,7 @@ contract Giveaways is ReentrancyGuard{
         }
     }
 
+
     function getWinners(uint64 _id) external view returns (address[] memory _winners) {
         _winners = giveaways[_id].winners;
     }
