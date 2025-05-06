@@ -11,11 +11,13 @@ contract Payments is ReentrancyGuard{
     mapping (address => uint16) public personalFee;
     mapping (address => mapping (uint16 => mapping (IERC20 => uint))) itemPrice;
     mapping (address => mapping (uint8 => mapping (IERC20 => uint))) subLevelPrice;
-    event newPremium(address user, uint8 month, uint price, IERC20 token, uint id);
-    event newAiToken(address user, uint8 amount, uint price, IERC20 token, uint id);
-    event newDonation(address from, address to, uint amount, IERC20 token, uint id);
-    event newItem(address user, address seller, uint16 itemId, uint price, IERC20 token, uint id);
-    event newSubToUser(address user, address subscribeTo, uint8 month, uint8 level, uint price, IERC20 token, uint id);
+    event NewPremium(address user, uint8 month, uint price, IERC20 token, uint id);
+    event NewAiToken(address user, uint8 amount, uint price, IERC20 token, uint id);
+    event NewDonation(address from, address to, uint amount, IERC20 token, uint id);
+    event NewItem(address user, address seller, uint16 itemId, uint price, IERC20 token, uint id);
+    event PayItem(address user, address seller, uint16 itemId, uint amount, IERC20 token, uint id);
+    event PaySub(address user, address seller, uint8 level, uint8 month, uint amount, IERC20 token, uint id);
+    event NewSubToUser(address user, address subscribeTo, uint8 month, uint8 level, uint price, IERC20 token, uint id);
     constructor() {
         owner = payable(msg.sender);
     }
@@ -60,7 +62,7 @@ contract Payments is ReentrancyGuard{
         if(_token == IERC20(address(0)))
             require(msg.value >= price, "Wrong eth amount");
         send(_token, price, msg.sender, owner);
-        emit newAiToken(_to, _amount, price, _token, txId);
+        emit NewAiToken(_to, _amount, price, _token, txId);
         txId++;
     }
 
@@ -72,7 +74,7 @@ contract Payments is ReentrancyGuard{
         if(_token == IERC20(address(0)))
             require(msg.value >= price, 'Wrong eth amount');
         send(_token, price, msg.sender, owner);
-        emit newPremium(_to, _month, price, _token, txId);
+        emit NewPremium(_to, _month, price, _token, txId);
         txId++;
     }
 
@@ -86,47 +88,84 @@ contract Payments is ReentrancyGuard{
         if(_token == IERC20(address(0)))
             require(msg.value >= price, 'Wrong eth amount');
         send(_token, (price - tax), msg.sender, _user);
-        send(_token, tax, msg.sender, owner);
-        emit newSubToUser(_to, _user, _month, _level, price, _token, txId);
+        if(tax > 0)
+            send(_token, tax, msg.sender, owner);
+        emit NewSubToUser(_to, _user, _month, _level, price, _token, txId);
         txId++;
     }
 
     function buyItem(address _to, address _seller, uint16 _itemId, IERC20 _token) external payable nonReentrant(){
         uint price = itemPrice[_seller][_itemId][_token];
         require(tokenPremiumPrice[_token] > 0 && price > 0, "Can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
         uint _fee = personalFee[msg.sender] == 0 ? fee : personalFee[msg.sender];
-        uint tax = price * _fee / 1000 ;
+        uint tax = price * _fee / 1000;
         if(_token == IERC20(address(0)))
             require(msg.value >= price, "Not enough eth to buy item");
         send(_token, (price - tax), msg.sender, _seller);
-        send(_token, tax, msg.sender, owner);
-        emit newItem(_to, _seller, _itemId, price, _token, txId);
+        if(tax > 0)
+            send(_token, tax, msg.sender, owner);
+        emit NewItem(_to, _seller, _itemId, price, _token, txId);
         txId++;
     }
 
     function donation(address _user, uint _amount, IERC20 _token) external payable nonReentrant(){
         require(tokenPremiumPrice[_token] > 0, "can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
         if(_token == IERC20(address(0)))
             _amount = msg.value;
         send(_token, _amount, msg.sender, _user);
-        emit newDonation(msg.sender, _user, _amount, _token, txId);
+        emit NewDonation(msg.sender, _user, _amount, _token, txId);
+        txId++;
+    }
+
+    function payForItem(address _to, address _seller, uint16 _itemId, uint _amount, IERC20 _token) external payable nonReentrant(){
+        if(_token == IERC20(address(0)))
+            _amount = msg.value;
+        require(tokenPremiumPrice[_token] > 0, "can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
+        require(_amount > 0, "amount must be > 0");
+        uint _fee = personalFee[msg.sender] == 0 ? fee : personalFee[msg.sender];
+        uint tax = _amount * _fee / 1000;
+        send(_token, (_amount - tax), msg.sender, _seller);
+        if(tax > 0)
+            send(_token, tax, msg.sender, owner);
+        emit PayItem(_to, _seller, _itemId, _amount, _token, txId);
+        txId++;
+    }
+
+    function payForSub(address _to, address _user, uint8 _month, uint8 _level, uint _amount, IERC20 _token) external payable nonReentrant(){
+        if(_token == IERC20(address(0)))
+            _amount = msg.value;
+        require(_month == 1 || _month == 3 || _month == 6 || _month == 9 || _month == 12, "Choose correct month");
+        require(tokenPremiumPrice[_token] > 0, "can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
+        require(_amount > 0, "amount must be > 0");
+        uint _fee = personalFee[msg.sender] == 0 ? fee : personalFee[msg.sender];
+        uint tax = _amount * _fee / 1000;
+        send(_token, (_amount - tax), msg.sender, _user);
+        if(tax > 0)
+            send(_token, tax, msg.sender, owner);
+        emit PaySub(_to, _user, _month, _level, _amount, _token, txId);
         txId++;
     }
 
     function changeUserSubPrice(IERC20 _token, uint8 _level, uint _price) external {
         require(tokenPremiumPrice[_token] > 0, "Can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
         subLevelPrice[msg.sender][_level][_token] = _price;
     }
 
     function changeItemPrice(IERC20 _token, uint16 _id, uint _price) external {
         require(tokenPremiumPrice[_token] > 0, "Can't use this token");
+        require(msg.sender != address(0), "Wrong sender");
         itemPrice[msg.sender][_id][_token] = _price; 
     }
 //___Private___//
     function send(IERC20 _token, uint _amount, address _from, address _to) private {
         if(_token == IERC20(address(0))){
-            (bool sent, ) = _to.call{value: _amount}("");
-            require(sent);        
+            (bool sent, ) = _to.call{value: _amount, gas: 4600}("");
+            require(sent, "Transfer failed");        
         } else {
             _token.transferFrom(_from, _to, _amount);
         }        

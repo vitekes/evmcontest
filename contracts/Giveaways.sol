@@ -136,8 +136,8 @@ contract Giveaways is ReentrancyGuard{
 //__Private__//
     function send(IERC20 _token, uint _amount, address _to) private {
         if(_token == IERC20(address(0))){
-            (bool sent, ) = _to.call{value: _amount}("");
-            require(sent);        
+            (bool sent, ) = _to.call{value: _amount, gas: 4600}("");
+            require(sent, "Transfer failed");        
         } else {
             _token.transfer(_to, _amount);
         }        
