@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { deployFullPlatformFixture } from "../fixtures";
-import { createTestContest, endContest } from "../helpers/ContestHelper";
+import { createTestContest, endContest, verifyPrizeClaim } from "../helpers/ContestHelper";
 import { ContestEscrow } from "../../typechain-types";
 
 /**
@@ -59,16 +59,10 @@ describe("Contest E2E Flow", function () {
     const prize1 = (totalPrize * BigInt(distribution[0].percentage)) / BigInt(10000);
     const prize2 = (totalPrize * BigInt(distribution[1].percentage)) / BigInt(10000);
 
-    const before1 = await ethers.provider.getBalance(winner1.address);
-    const tx1 = await escrow.connect(winner1).claimPrize();
-    await tx1.wait();
-    const after1 = await ethers.provider.getBalance(winner1.address);
-    expect(after1 - before1).to.be.closeTo(prize1, BigInt(1e14));
+    const actual1 = await verifyPrizeClaim(escrow as ContestEscrow, winner1, prize1);
+    expect(actual1).to.be.closeTo(prize1, BigInt(1e14));
 
-    const before2 = await ethers.provider.getBalance(winner2.address);
-    const tx2 = await escrow.connect(winner2).claimPrize();
-    await tx2.wait();
-    const after2 = await ethers.provider.getBalance(winner2.address);
-    expect(after2 - before2).to.be.closeTo(prize2, BigInt(1e14));
+    const actual2 = await verifyPrizeClaim(escrow as ContestEscrow, winner2, prize2);
+    expect(actual2).to.be.closeTo(prize2, BigInt(1e14));
   });
 });
