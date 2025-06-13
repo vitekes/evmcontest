@@ -1,43 +1,50 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
-import 'dotenv/config'
+import "@nomicfoundation/hardhat-ignition";
+import "@typechain/hardhat";
 
-const { PRIVATE_KEY } = process.env;
-const { BSC_TESTNET_URL,POLYGON_URL,MUMBAI_URL,ETH_URL } = process.env;
-const { BSC_API } = process.env;
 const config: HardhatUserConfig = {
-  solidity:{
-    version:"0.8.28",
-    settings: {
-      viaIR: true,
-      optimizer: {
-        enabled: true,
-        runs: 1,
-      }
+    solidity: {
+        version: "0.8.28",
+        settings: {
+            optimizer: {
+                enabled: true,
+                runs: 200,
+            },
+            viaIR: true
+        },
+    },
+    networks: {
+        localhost: {
+            url: "http://127.0.0.1:8545"
+        },
+        hardhat: {
+            // Встроенная тестовая сеть
+        },
+        sepolia: {
+            url: process.env.SEPOLIA_URL || "",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        },
+        mainnet: {
+            url: process.env.MAINNET_URL || "",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        }
+    },
+    etherscan: {
+        apiKey: process.env.ETHERSCAN_API_KEY || "",
+    },
+    mocha: {
+        timeout: 120000,
+        reporter: 'spec'
+    },
+    typechain: {
+        outDir: "typechain-types",
+        target: "ethers-v6",
+        alwaysGenerateOverloads: false,
+        discriminateTypes: false,
+        tsNocheck: false,
+        dontOverrideCompile: false
     }
-  },
-
-  networks:{
-    testnet:{
-      url:"https://bsc-testnet-rpc.publicnode.com",
-      accounts:[`0x${PRIVATE_KEY}`]
-    },
-    polygon:{
-      url:POLYGON_URL,
-      accounts:[`0x${PRIVATE_KEY}`]
-    },
-    eth:{
-      url:ETH_URL,
-      accounts:[`0x${PRIVATE_KEY}`]
-    },
-    mumbai:{
-      url:MUMBAI_URL,
-      accounts:[`0x${PRIVATE_KEY}`]
-    }
-  },
-  etherscan:{
-      apiKey: BSC_API
-  }
 };
 
 export default config;
