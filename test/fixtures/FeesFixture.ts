@@ -20,7 +20,7 @@ export async function deployNetworkFeeManagerFixture() {
     // Настройка стандартных комиссий для разных сетей
     await feeManager.setNetworkFee(NETWORK_IDS.ETHEREUM, 200);   // 2% для Ethereum Mainnet
     await feeManager.setNetworkFee(NETWORK_IDS.POLYGON, 100);    // 1% для Polygon
-    await feeManager.setNetworkFee(NETWORK_IDS.LOCALHOST, TEST_CONSTANTS.DEFAULT_FEE_BP); // 1% для локальной сети
+    await feeManager.setNetworkFee(NETWORK_IDS.LOCALHOST, 200); // 2% для локальной сети
 
     console.log("✅ NetworkFeeManager deployed successfully!");
 

@@ -16,7 +16,7 @@ export const TEST_CONSTANTS = {
     LARGE_PRIZE: ethers.parseEther("100.0"),
     
     // Комиссии
-    DEFAULT_FEE_BP: 100, // 1%
+    DEFAULT_FEE_BP: 200, // 2%
     HIGH_FEE_BP: 500,    // 5%
     
     // Токены

@@ -77,11 +77,21 @@ export async function prepareERC20Token(
     console.log(`🔧 Preparing ERC20 token for ${account.address}, amount: ${amount}`);
 
     try {
-        // Получаем информацию о токене для отладки
-        const tokenName = await tokenContract.name();
+        // Получаем минимальную информацию о токене для отладки
         const tokenSymbol = await tokenContract.symbol();
-        const tokenDecimals = await tokenContract.decimals();
-        console.log(`📝 Информация о токене: ${tokenName} (${tokenSymbol}), decimals: ${tokenDecimals}`);
+        const tokenAddress = await tokenContract.getAddress();
+        console.log(`📝 Информация о токене: ${tokenSymbol}, address: ${tokenAddress}`);
+
+        // Проверяем валидность токена до любых операций
+        if (tokenValidator) {
+            try {
+                const isValid = await tokenValidator.isValidToken(tokenAddress).catch(() => false);
+                const isStable = await tokenValidator.isStablecoin?.(tokenAddress).catch(() => false);
+                console.log(`🔍 Статус токена перед операциями: isValid=${isValid}, isStablecoin=${isStable}`);
+            } catch (validationError) {
+                console.log(`⚠️ Не удалось проверить статус токена: ${validationError}`);
+            }
+        }
 
         // 1. Проверяем текущий баланс
         const currentBalance = await tokenContract.balanceOf(account.address);
@@ -508,7 +518,7 @@ export const BALANCE_SCENARIOS = {
         weth: toTokenUnits(1, 18),        // 1 WETH
         eth: ethers.parseEther("10")      // 10 ETH
     },
-    
+
     // Средние балансы для большинства тестов
     STANDARD: {
         usdc: toTokenUnits(100000, 6),    // 100,000 USDC
@@ -516,7 +526,7 @@ export const BALANCE_SCENARIOS = {
         weth: toTokenUnits(50, 18),       // 50 WETH
         eth: ethers.parseEther("100")     // 100 ETH
     },
-    
+
     // Большие балансы для стресс-тестов
     LARGE: {
         usdc: toTokenUnits(10000000, 6),  // 10M USDC

@@ -20,6 +20,9 @@ const config: HardhatUserConfig = {
         },
         hardhat: {
             // Встроенная тестовая сеть
+            gas: 200000000,
+            blockGasLimit: 200000000,
+            allowUnlimitedContractSize: true
         },
         sepolia: {
             url: process.env.SEPOLIA_URL || "",

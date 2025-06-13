@@ -33,8 +33,8 @@ export async function setupTestAccounts() {
     console.log(`   Treasury: ${treasury.address}`);
 
     // Обеспечиваем достаточные балансы ETH
-    const requiredBalance = ethers.parseEther("1000");
-    const accounts = [creator1, creator2, participant1, participant2];
+    const requiredBalance = ethers.parseEther("5000"); // Увеличиваем до 5000 ETH
+    const accounts = [creator1, creator2, participant1, participant2, winner1, winner2, winner3];
     
     for (const account of accounts) {
         const balance = await ethers.provider.getBalance(account.address);

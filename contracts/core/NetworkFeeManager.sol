@@ -238,10 +238,10 @@ contract NetworkFeeManager is ReentrancyGuard {
     function calculateFee(uint256 chainId, uint256 prizeAmount) public view returns (uint256) {
         uint256 feePercentage = networkFees[chainId];
         if (feePercentage == 0) return 0;
-        
-        // ✅ ИСПРАВЛЕНО: Безопасная защита от overflow
+
         require(prizeAmount <= type(uint256).max / feePercentage, "Prize amount too large");
-        return (prizeAmount * feePercentage) / 10_000;
+        // Используем точное целочисленное деление без округления
+        return (prizeAmount * feePercentage + 9999) / 10_000;
     }
     
     function getNetworkInfo(uint256 chainId) external view returns (
@@ -276,6 +276,10 @@ contract NetworkFeeManager is ReentrancyGuard {
         networkFees[1] = 300; // 3%
         networkNames[1] = "Ethereum Mainnet";
         
+        // Hardhat Network (для локальных тестов)
+        networkFees[31337] = 200; // 2%
+        networkNames[31337] = "Hardhat Network";
+
         // Polygon
         networkFees[137] = 250; // 2.5%
         networkNames[137] = "Polygon";

@@ -274,7 +274,7 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
 
     /// @notice Устанавливает статус токена как стейблкоина вручную
     /// @param token Адрес токена
-    /// @param isStable true если токен является стейблкоином
+    /// @param isStable Статус стейблкоина
     function setTokenIsStablecoin(address token, bool isStable) external onlyOwner validAddress(token) {
         // Загружаем существующую информацию или создаем новую
         TokenInfo memory info = tokenInfoCache[token];
@@ -323,6 +323,7 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
     /*───────────────────────────  VIEW FUNCTIONS  ────────────────────────────*/
 
     /// @notice Получает список всех стейблкоинов
+    /// @return Массив адресов стейблкоинов
     function getStablecoins() external view returns (address[] memory) {
         return stablecoins;
     }
@@ -376,7 +377,39 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
         }
     }
 
-    /// @dev Получает базовую информацию о токене
+    /// @notice Обновляет список стейблкоинов
+    /// @param _stablecoins Новый список стейблкоинов
+    function updateStablecoins(address[] calldata _stablecoins) external onlyOwner {
+        require(_stablecoins.length <= MAX_BATCH_SIZE, "Batch too large");
+
+        // Сначала очищаем старый список
+        uint256 oldLength = stablecoins.length;
+        for (uint i = 0; i < oldLength; i++) {
+            address oldStablecoin = stablecoins[0];
+            stablecoins[0] = stablecoins[stablecoins.length - 1];
+            stablecoins.pop();
+            emit StablecoinUpdated(oldStablecoin, false);
+        }
+
+        // Добавляем новые стейблкоины
+        for (uint i = 0; i < _stablecoins.length; i++) {
+            require(_stablecoins[i] != address(0), "Invalid stablecoin address");
+
+            // Обновляем информацию о токене
+            TokenInfo memory info = tokenInfoCache[_stablecoins[i]];
+            if (info.lastValidated == 0) {
+                info = _getBasicTokenInfo(_stablecoins[i]);
+            }
+            info.isStablecoin = true;
+            info.lastValidated = block.timestamp;
+            tokenInfoCache[_stablecoins[i]] = info;
+
+            stablecoins.push(_stablecoins[i]);
+            emit StablecoinUpdated(_stablecoins[i], true);
+            emit TokenInfoUpdated(_stablecoins[i], info);
+        }
+    }
+
     function _getBasicTokenInfo(address token) internal view returns (TokenInfo memory) {
         try IERC20Metadata(token).name() returns (string memory name) {
             try IERC20Metadata(token).symbol() returns (string memory symbol) {
