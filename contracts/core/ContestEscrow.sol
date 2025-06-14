@@ -45,7 +45,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     event WinnersDeclared(address[] winners, uint256[] places);
     event PrizeClaimed(address indexed winner, uint256 amount);
     event ContestCancelled(string reason);
-    event EmergencyWithdrawal(address indexed initiator, uint256 amount, string reason);
+    event EmergencyWithdrawal(address indexed initiator, uint256 oldBalance, uint256 newBalance, string reason);
 
     modifier onlyCreator() {
         require(msg.sender == _creator, "Only creator can call this");
@@ -201,23 +201,26 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         lastEmergencyWithdraw = block.timestamp;
 
         // Emergency withdrawal - правильная проверка типа токена
-        uint256 balance;
+        uint256 oldBalance;
         if (address(_token) == address(0)) {
             // ETH конкурс
-            balance = address(this).balance;
-            if (balance > 0) {
-                (bool success,) = _treasury.call{value: balance}("");
+            oldBalance = address(this).balance;
+            if (oldBalance > 0) {
+                (bool success,) = _treasury.call{value: oldBalance}("");
                 require(success, "ETH emergency transfer failed");
             }
         } else {
             // ERC20 конкурс
-            balance = _token.balanceOf(address(this));
-            if (balance > 0) {
-                SafeERC20.safeTransfer(_token, _treasury, balance);
+            oldBalance = _token.balanceOf(address(this));
+            if (oldBalance > 0) {
+                SafeERC20.safeTransfer(_token, _treasury, oldBalance);
             }
         }
+        uint256 newBalance = address(_token) == address(0)
+            ? address(this).balance
+            : _token.balanceOf(address(this));
 
-        emit EmergencyWithdrawal(msg.sender, balance, reason);
+        emit EmergencyWithdrawal(msg.sender, oldBalance, newBalance, reason);
     }
 
     // View functions implementing interface
@@ -346,23 +349,26 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         require(allClaimedOrExpired || block.timestamp > _endTime + 90 days, 
                 "Not all prizes claimed and not expired");
 
-        uint256 balance;
+        uint256 oldBalance;
         if (address(_token) == address(0)) {
             // ETH конкурс
-            balance = address(this).balance;
-            if (balance > 0) {
-                (bool success, ) = _treasury.call{value: balance}("");
+            oldBalance = address(this).balance;
+            if (oldBalance > 0) {
+                (bool success, ) = _treasury.call{value: oldBalance}("");
                 require(success, "ETH transfer failed");
             }
         } else {
             // ERC20 конкурс
-            balance = _token.balanceOf(address(this));
-            if (balance > 0) {
-                SafeERC20.safeTransfer(_token, _treasury, balance);
+            oldBalance = _token.balanceOf(address(this));
+            if (oldBalance > 0) {
+                SafeERC20.safeTransfer(_token, _treasury, oldBalance);
             }
         }
+        uint256 newBalance = address(_token) == address(0)
+            ? address(this).balance
+            : _token.balanceOf(address(this));
 
-        emit EmergencyWithdrawal(msg.sender, balance, "Remaining funds withdrawn");
+        emit EmergencyWithdrawal(msg.sender, oldBalance, newBalance, "Remaining funds withdrawn");
     }
 
     // Emergency functions

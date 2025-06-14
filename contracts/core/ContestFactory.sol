@@ -43,6 +43,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     // Ограничения на время конкурса
     uint256 public constant MAX_CONTEST_DURATION = 270 days;
     uint256 public constant MIN_CONTEST_DURATION = 1 hours;
+    uint256 public constant MAX_EMERGENCY_BATCH = 200;
 
     /*───────────────────────────  EVENTS  ────────────────────────────────────*/
 
@@ -118,6 +119,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     error EscrowNotFound();
     error NoEthToRecover();
     error NoTokensToRecover();
+    error BatchTooLarge();
 
     /*───────────────────────────  STRUCTS  ───────────────────────────────────*/
 
@@ -485,6 +487,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     onlyOwner
     whenNotPaused
     {
+        if (contestIds.length > MAX_EMERGENCY_BATCH) revert BatchTooLarge();
         uint256 successCount = 0;
 
         for (uint256 i = 0; i < contestIds.length; i++) {
