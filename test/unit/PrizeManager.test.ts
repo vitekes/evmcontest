@@ -78,13 +78,13 @@ describe("PrizeManager", function() {
     it("should prevent creating a contest with an existing ID", async function() {
       await expect(
         prizeManager.connect(authorizedCreator).createContest(contestId, "")
-      ).to.be.revertedWith("Contest already exists");
+      ).to.be.revertedWithCustomError(prizeManager, "ContestAlreadyExists");
     });
 
     it("should prevent unauthorized users from creating contests", async function() {
       await expect(
         prizeManager.connect(unauthorizedUser).createContest(2, "")
-      ).to.be.revertedWith("Not authorized");
+      ).to.be.revertedWithCustomError(prizeManager, "NotAuthorized");
     });
   });
 
@@ -211,7 +211,7 @@ describe("PrizeManager", function() {
       // Попытка выдать истекший приз должна быть отклонена
       await expect(
         prizeManager.connect(owner).claimPrize(contestId, 0, winner.address)
-      ).to.be.revertedWith("Prize expired");
+      ).to.be.revertedWithCustomError(prizeManager, "PrizeExpired");
     });
 
     it("should prevent non-contest creators from adding prizes", async function() {
@@ -224,7 +224,7 @@ describe("PrizeManager", function() {
           ethers.ZeroHash,
           0
         )
-      ).to.be.revertedWith("Not contest creator");
+      ).to.be.revertedWithCustomError(prizeManager, "NotContestCreator");
     });
   });
 
@@ -263,7 +263,7 @@ describe("PrizeManager", function() {
     it("should prevent unauthorized claims", async function() {
       await expect(
         prizeManager.connect(unauthorizedUser).claimPrize(contestId, 0, winner.address)
-      ).to.be.revertedWith("Not authorized");
+      ).to.be.revertedWithCustomError(prizeManager, "NotAuthorized");
     });
 
     it("should prevent claiming the same prize twice", async function() {
@@ -271,7 +271,7 @@ describe("PrizeManager", function() {
 
       await expect(
         prizeManager.connect(owner).claimPrize(contestId, 0, winner.address)
-      ).to.be.revertedWith("Prize already claimed");
+      ).to.be.revertedWithCustomError(prizeManager, "PrizeAlreadyClaimed");
     });
 
     it("should handle secret reveals", async function() {
@@ -292,13 +292,13 @@ describe("PrizeManager", function() {
       // Попытка раскрыть с неверным секретом
       await expect(
         prizeManager.connect(winner).revealSecret(contestId, 1, "WRONG_SECRET")
-      ).to.be.revertedWith("Invalid secret");
+      ).to.be.revertedWithCustomError(prizeManager, "InvalidSecret");
     });
 
     it("should prevent revealing secrets for unclaimed prizes", async function() {
       await expect(
         prizeManager.connect(winner).revealSecret(contestId, 1, "SECRET123")
-      ).to.be.revertedWith("Prize not claimed yet");
+      ).to.be.revertedWithCustomError(prizeManager, "PrizeNotClaimed");
     });
   });
 
@@ -378,7 +378,7 @@ describe("PrizeManager", function() {
           0,
           "ANOTHER_CODE"
         )
-      ).to.be.revertedWith("Already processed");
+      ).to.be.revertedWithCustomError(prizeManager, "AlreadyProcessed");
     });
   });
 
@@ -447,7 +447,7 @@ describe("PrizeManager", function() {
     it("should revert on invalid prize index", async function() {
       await expect(
         prizeManager.getPrize(contestId, 99)
-      ).to.be.revertedWith("Invalid prize index");
+      ).to.be.revertedWithCustomError(prizeManager, "InvalidPrizeIndex");
     });
   });
 });

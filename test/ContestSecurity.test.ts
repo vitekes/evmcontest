@@ -66,7 +66,7 @@ describe("Security", function () {
       escrow
         .connect(participant1)
         .declareWinners([participant1.address], [1])
-    ).to.be.revertedWith("Only jury or creator");
+    ).to.be.revertedWithCustomError(escrow, "OnlyJuryOrCreator");
   });
 
   it("should restrict emergencyWithdraw to factory", async function () {
@@ -82,6 +82,6 @@ describe("Security", function () {
 
     await expect(
       escrow.connect(participant1).emergencyWithdraw("hack")
-    ).to.be.revertedWith("Only factory can call this");
+    ).to.be.revertedWithCustomError(escrow, "OnlyFactory");
   });
 });
