@@ -123,7 +123,7 @@ describe("Contest Creation Integration", function() {
         console.log(`Начальное значение lastId: ${initialLastId}`);
       } catch (error) {
         console.error(`Функция lastId недоступна: ${error}`);
-        this.skip();
+        throw error;
       }
 
       // Создаем простой конкурс
@@ -273,6 +273,7 @@ describe("Contest Creation Integration", function() {
           console.log(`Найдено событие ContestCreated! ID: ${contestId}, Эскроу: ${escrowAddress}`);
         } catch (error) {
           console.error(`Ошибка при разборе события: ${error}`);
+          throw error;
         }
       }
 
@@ -283,7 +284,7 @@ describe("Contest Creation Integration", function() {
           console.log(`Получен contestId из lastId: ${contestId}`);
         } catch (error) {
           console.error(`Ошибка при получении lastId: ${error}`);
-          this.skip();
+          throw error;
         }
       }
 
@@ -294,15 +295,15 @@ describe("Contest Creation Integration", function() {
     it("should have lastId function in ContestFactory", async function() {
       // Проверяем, что функция lastId доступна и работает
       console.log("Проверка доступности функции lastId в ContestFactory...");
-      try {
-        const lastId = await contestFactory.lastId();
-        console.log(`Текущее значение lastId: ${lastId}`);
-        expect(typeof lastId).to.not.equal('undefined');
-      } catch (error) {
-        console.error(`Ошибка при вызове lastId: ${error}`);
-        // Если функция lastId не существует, это может быть причиной ошибки в тестах
-        this.skip();
-      }
+        try {
+          const lastId = await contestFactory.lastId();
+          console.log(`Текущее значение lastId: ${lastId}`);
+          expect(typeof lastId).to.not.equal('undefined');
+        } catch (error) {
+          console.error(`Ошибка при вызове lastId: ${error}`);
+          // Если функция lastId не существует, это может быть причиной ошибки в тестах
+          throw error;
+        }
     });
     it("should create contest and verify escrow address", async function() {
       const totalPrize = TEST_CONSTANTS.SMALL_PRIZE;
@@ -622,6 +623,7 @@ describe("Contest Creation Integration", function() {
             }
           } catch (error) {
             console.log(`Ошибка при разборе события по topicHash: ${error}`);
+            throw error;
           }
         }
 
