@@ -585,11 +585,50 @@ export async function simulateContestEnd(escrow: ContestEscrow): Promise<number>
 }
 
 /**
- * Создает параметры времени для конкурса
- * @param currentTime Текущее время
- * @param durationHours Продолжительность конкурса в часах
- * @param delayHours Задержка начала конкурса в часах
- * @returns Объект с временем начала и окончания конкурса
+ * Generates start and end times for a contest relative to the current time.
+ * @param currentTime Current blockchain timestamp
+ * @param durationHours Contest duration in hours (default 24)
+ * @param delayHours Delay before start in hours (default 1)
+ */
+export function createContestTimeParams(
+    currentTime: number,
+    durationHours: number = 24,
+    delayHours: number = 1
+) {
+    const startTime = BigInt(currentTime + delayHours * 3600);
+    const endTime = BigInt(currentTime + (delayHours + durationHours) * 3600);
+    return { startTime, endTime };
+}
+
+/**
+ * Claims the prize for the provided winner and returns the actual received value
+ * taking gas costs into account.
+ * @param escrow ContestEscrow contract
+ * @param winner Signer claiming the prize
+ * @param expectedPrize Expected prize amount
+ */
+export async function verifyPrizeClaim(
+    escrow: ContestEscrow,
+    winner: any,
+    expectedPrize: bigint
+): Promise<bigint> {
+    const before = await ethers.provider.getBalance(winner.address);
+    const tx = await escrow.connect(winner).claimPrize();
+    const receipt = await tx.wait();
+    const gasUsed = receipt ? receipt.gasUsed * receipt.gasPrice : 0n;
+    const after = await ethers.provider.getBalance(winner.address);
+    const received = after + gasUsed - before;
+    const claimed = await escrow.hasClaimed(winner.address);
+    if (!claimed) {
+        throw new Error("Prize not marked as claimed");
+    }
+    return received;
+}
+
+/**
+ * Генерирует массив случайных адресов для тестовых членов жюри
+ * @param count - Количество адресов (по умолчанию 3)
+ * @returns Массив адресов
  */
 export function createContestTimeParams(currentTime: number, durationHours: number = 24, delayHours: number = 1) {
   const startTime = BigInt(currentTime + delayHours * 3600);
@@ -664,5 +703,9 @@ export {
     createTestContest as createContest,
     simulateContestEnd as simulateContest,
     generateTestJury as generateJury,
-    generateTestWinners as generateWinners
+    generateTestWinners as generateWinners,
+    endContest,
+    createContestTimeParams,
+    verifyPrizeClaim
+
 };
