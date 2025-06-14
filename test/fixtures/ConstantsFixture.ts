@@ -29,7 +29,8 @@ export const CONTEST_TEMPLATES = {
     WINNER_TAKES_ALL: 0,
     TOP_2: 1,
     TOP_3: 2,
-    TOP_5: 3
+    TOP_5: 3,
+    CUSTOM: 4
 } as const;
 
 export const PRIZE_TYPES = {
