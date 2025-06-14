@@ -203,6 +203,26 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
     function getPrizesCount(uint256 contestId) external view returns (uint256) {
         return contestPrizes[contestId].prizes.length;
     }
+
+    /// @notice Возвращает часть призов постранично
+    function getPrizesPaged(
+        uint256 contestId,
+        uint256 start,
+        uint256 count
+    ) external view returns (Prize[] memory prizes) {
+        ContestPrizes storage cp = contestPrizes[contestId];
+        uint256 total = cp.prizes.length;
+        if (start >= total) {
+            return new Prize[](0);
+        }
+        uint256 end = start + count;
+        if (end > total) end = total;
+
+        prizes = new Prize[](end - start);
+        for (uint256 i = start; i < end; i++) {
+            prizes[i - start] = cp.prizes[i];
+        }
+    }
     
     function getMonetaryPrizesTotal(uint256 contestId) external view returns (uint256) {
         return contestPrizes[contestId].totalMonetaryValue;

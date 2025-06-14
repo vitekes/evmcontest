@@ -34,6 +34,11 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     uint256[] private _winnerPlaces;
     mapping(address => bool) private _hasClaimed;
     mapping(address => uint256) private _claimedAmounts;
+    uint256 public lastEmergencyWithdraw;
+    uint256 public constant EMERGENCY_COOLDOWN = 1 days;
+    uint256 private constant TIME_BUFFER = 1 minutes;
+
+    error EmergencyCooldownActive();
 
     // Events
     event ContestInitialized(uint256 indexed contestId, address indexed creator, uint256 totalPrize);
@@ -59,8 +64,8 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
 
     modifier onlyActive() {
         require(!_isCancelled && !_isFinalized, "Contest not active");
-        require(block.timestamp >= _startTime, "Contest not started");
-        require(block.timestamp <= _endTime, "Contest ended");
+        require(block.timestamp + TIME_BUFFER >= _startTime, "Contest not started");
+        require(block.timestamp <= _endTime + TIME_BUFFER, "Contest ended");
         _;
     }
 
@@ -120,7 +125,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         address[] calldata winners,
         uint256[] calldata places
     ) external override onlyJury {
-        require(block.timestamp > _endTime, "Contest still active");
+        require(block.timestamp + TIME_BUFFER > _endTime, "Contest still active");
         require(!_isFinalized && !_isCancelled, "Contest already finalized or cancelled");
         require(winners.length == places.length, "Mismatched arrays");
         require(winners.length <= _distribution.length, "Too many winners");
@@ -191,6 +196,9 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
 
     function emergencyWithdraw(string calldata reason) external override onlyFactory {
         // onlyFactory модификатор уже проверяет доступ
+        if (block.timestamp < lastEmergencyWithdraw + EMERGENCY_COOLDOWN)
+            revert EmergencyCooldownActive();
+        lastEmergencyWithdraw = block.timestamp;
 
         // Emergency withdrawal - правильная проверка типа токена
         uint256 balance;
