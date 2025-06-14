@@ -138,7 +138,7 @@ describe("Emergency Roles Unit Tests", function () {
             // из-за модификатора onlyFactory
             await expect(
                 escrow.connect(emergencyUser1).emergencyWithdraw("Unauthorized")
-            ).to.be.revertedWith("Only factory can call this");
+            ).to.be.revertedWithCustomError(escrow, "OnlyFactory");
         });
 
         it("✅ Should handle multiple emergency roles correctly", async function () {

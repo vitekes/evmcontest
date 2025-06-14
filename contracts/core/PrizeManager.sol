@@ -53,16 +53,28 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
         string prizeMetadata,
         bytes32 requestId
     );
+
+    /*───────────────────────────  ERRORS  ───────────────────────────────────*/
+    error NotAuthorized();
+    error NotContestCreator();
+    error ContestAlreadyExists();
+    error InvalidPrizeIndex();
+    error PrizeAlreadyClaimed();
+    error PrizeExpired();
+    error PrizeNotClaimed();
+    error NoSecret();
+    error InvalidSecret();
+    error AlreadyProcessed();
     
     /*───────────────────────────  MODIFIERS  ─────────────────────────────────*/
     
     modifier onlyAuthorized() {
-        require(authorizedCreators[msg.sender] || msg.sender == owner(), "Not authorized"); // ✅ ИСПРАВЛЕНО: добавили ()
+        if (!(authorizedCreators[msg.sender] || msg.sender == owner())) revert NotAuthorized();
         _;
     }
-    
+
     modifier onlyContestCreator(uint256 contestId) {
-        require(contestCreators[contestId] == msg.sender, "Not contest creator");
+        if (contestCreators[contestId] != msg.sender) revert NotContestCreator();
         _;
     }
     
@@ -84,7 +96,7 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
         uint256 contestId,
         string calldata metadata
     ) external onlyAuthorized {
-        require(contestCreators[contestId] == address(0), "Contest already exists");
+        if (contestCreators[contestId] != address(0)) revert ContestAlreadyExists();
         
         contestCreators[contestId] = msg.sender;
         contestPrizes[contestId].contestMetadata = metadata;
@@ -130,11 +142,11 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
         uint256 prizeIndex, 
         address winner
     ) external override onlyAuthorized nonReentrant {
-        require(prizeIndex < contestPrizes[contestId].prizes.length, "Invalid prize index");
+        if (prizeIndex >= contestPrizes[contestId].prizes.length) revert InvalidPrizeIndex();
         
         Prize storage prize = contestPrizes[contestId].prizes[prizeIndex];
-        require(!prize.claimed, "Prize already claimed");
-        require(block.timestamp <= prize.expirationDate || prize.expirationDate == 0, "Prize expired");
+        if (prize.claimed) revert PrizeAlreadyClaimed();
+        if (!(block.timestamp <= prize.expirationDate || prize.expirationDate == 0)) revert PrizeExpired();
         
         prize.claimed = true;
         
@@ -165,9 +177,9 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
         string calldata secret
     ) external override {
         Prize storage prize = contestPrizes[contestId].prizes[prizeIndex];
-        require(prize.claimed, "Prize not claimed yet");
-        require(prize.secretHash != bytes32(0), "No secret for this prize");
-        require(keccak256(abi.encodePacked(secret)) == prize.secretHash, "Invalid secret");
+        if (!prize.claimed) revert PrizeNotClaimed();
+        if (prize.secretHash == bytes32(0)) revert NoSecret();
+        if (keccak256(abi.encodePacked(secret)) != prize.secretHash) revert InvalidSecret();
         
         emit SecretRevealed(contestId, prizeIndex, msg.sender, secret);
     }
@@ -181,7 +193,7 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
         uint256 prizeIndex,
         string calldata promocode
     ) external onlyOwner {
-        require(!processedEvents[requestId], "Already processed");
+        if (processedEvents[requestId]) revert AlreadyProcessed();
         processedEvents[requestId] = true;
         
         // Сохраняем хеш промокода для последующей верификации
@@ -196,7 +208,7 @@ contract PrizeManager is IPrizeManager, Ownable, ReentrancyGuard {
     }
     
     function getPrize(uint256 contestId, uint256 prizeIndex) external view returns (Prize memory) {
-        require(prizeIndex < contestPrizes[contestId].prizes.length, "Invalid prize index");
+        if (prizeIndex >= contestPrizes[contestId].prizes.length) revert InvalidPrizeIndex();
         return contestPrizes[contestId].prizes[prizeIndex];
     }
     
