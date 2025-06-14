@@ -311,6 +311,18 @@ describe("TokenValidator", function () {
             const updatedInfo = await tokenValidator.getTokenInfo(tokenAddress);
             expect(updatedInfo.lastValidated).to.be.gt(initialInfo.lastValidated);
         });
+
+        it("не должен считать ребейз-токен валидным", async function () {
+            const { tokenValidator, owner } = await loadFixture(deployTokenValidatorFixture);
+            const RebaseToken = await ethers.getContractFactory("MockERC20");
+            const rebase = await RebaseToken.deploy("Rebase", "RBS", 18, 0);
+            const addr = await rebase.getAddress();
+
+            await tokenValidator.connect(owner).setTokenWhitelist(addr, true, "test");
+            await tokenValidator.connect(owner).setRebaseToken(addr, true);
+
+            expect(await tokenValidator.isValidToken(addr)).to.equal(false);
+        });
     });
 
 });

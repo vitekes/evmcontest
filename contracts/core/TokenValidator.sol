@@ -90,6 +90,8 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
         // Native токен всегда валиден (ETH, BNB, MATIC и т.д.)
         if (token == address(0)) return true;
 
+        if (rebaseTokens[token]) return false;
+
         // Проверяем blacklist
         if (blacklistedTokens[token]) return false;
 

@@ -39,6 +39,37 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     uint256 private constant TIME_BUFFER = 1 minutes;
 
     error EmergencyCooldownActive();
+    error OnlyCreator();
+    error OnlyJuryOrCreator();
+    error OnlyFactory();
+    error ContestNotActive();
+    error ContestNotStarted();
+    error ContestEnded();
+    error ContestNotFinalized();
+    error ZeroCreatorAddress();
+    error ZeroTreasuryAddress();
+    error AlreadyInitialized();
+    error IncorrectEthAmount();
+    error NoEthNeeded();
+    error InsufficientTokenBalance();
+    error ContestStillActive();
+    error AlreadyFinalizedOrCancelled();
+    error MismatchedArrays();
+    error TooManyWinners();
+    error InvalidPlace();
+    error ZeroWinnerAddress();
+    error DuplicatePlace();
+    error AlreadyClaimed();
+    error NotAWinner();
+    error NoPrizeForPlace();
+    error EthTransferFailed();
+    error ContestAlreadyFinalized();
+    error AlreadyCancelled();
+    error EthRefundFailed();
+    error EthEmergencyTransferFailed();
+    error ContestNotFinalizedForWithdraw();
+    error TooEarlyForCleanup();
+    error NotAllPrizesClaimed();
 
     // Events
     event ContestInitialized(uint256 indexed contestId, address indexed creator, uint256 totalPrize);
@@ -48,36 +79,36 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     event EmergencyWithdrawal(address indexed initiator, uint256 oldBalance, uint256 newBalance, string reason);
 
     modifier onlyCreator() {
-        require(msg.sender == _creator, "Only creator can call this");
+        if (msg.sender != _creator) revert OnlyCreator();
         _;
     }
 
     modifier onlyJury() {
-        require(hasRole(JURY_ROLE, msg.sender) || msg.sender == _creator, "Only jury or creator");
+        if (!(hasRole(JURY_ROLE, msg.sender) || msg.sender == _creator)) revert OnlyJuryOrCreator();
         _;
     }
 
     modifier onlyFactory() {
-        require(msg.sender == _factory, "Only factory can call this");
+        if (msg.sender != _factory) revert OnlyFactory();
         _;
     }
 
     modifier onlyActive() {
-        require(!_isCancelled && !_isFinalized, "Contest not active");
-        require(block.timestamp + TIME_BUFFER >= _startTime, "Contest not started");
-        require(block.timestamp <= _endTime + TIME_BUFFER, "Contest ended");
+        if (_isCancelled || _isFinalized) revert ContestNotActive();
+        if (block.timestamp + TIME_BUFFER < _startTime) revert ContestNotStarted();
+        if (block.timestamp > _endTime + TIME_BUFFER) revert ContestEnded();
         _;
     }
 
     modifier onlyFinalized() {
-        require(_isFinalized, "Contest not finalized");
+        if (!_isFinalized) revert ContestNotFinalized();
         _;
     }
 
     function init(ContestParams calldata params) external payable override {
-        require(params.creator != address(0), "Zero creator address");
-        require(params.treasury != address(0), "Zero treasury address");
-        require(_factory == address(0), "Already initialized");
+        if (params.creator == address(0)) revert ZeroCreatorAddress();
+        if (params.treasury == address(0)) revert ZeroTreasuryAddress();
+        if (_factory != address(0)) revert AlreadyInitialized();
 
         _factory = msg.sender;
         _creator = params.creator;
@@ -111,11 +142,11 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         // Handle payment - правильная проверка типа токена
         if (address(_token) == address(0)) {
             // ETH конкурс
-            require(msg.value == _totalPrize, "Incorrect ETH amount");
+            if (msg.value != _totalPrize) revert IncorrectEthAmount();
         } else {
             // ERC20 конкурс - токены уже должны быть переведены на этот контракт из Factory
-            require(msg.value == 0, "No ETH needed for ERC20 contest");
-            require(_token.balanceOf(address(this)) >= _totalPrize, "Insufficient token balance");
+            if (msg.value != 0) revert NoEthNeeded();
+            if (_token.balanceOf(address(this)) < _totalPrize) revert InsufficientTokenBalance();
         }
 
         emit ContestInitialized(_contestId, _creator, _totalPrize);
@@ -125,19 +156,19 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         address[] calldata winners,
         uint256[] calldata places
     ) external override onlyJury {
-        require(block.timestamp + TIME_BUFFER > _endTime, "Contest still active");
-        require(!_isFinalized && !_isCancelled, "Contest already finalized or cancelled");
-        require(winners.length == places.length, "Mismatched arrays");
-        require(winners.length <= _distribution.length, "Too many winners");
+        if (block.timestamp + TIME_BUFFER <= _endTime) revert ContestStillActive();
+        if (_isFinalized || _isCancelled) revert AlreadyFinalizedOrCancelled();
+        if (winners.length != places.length) revert MismatchedArrays();
+        if (winners.length > _distribution.length) revert TooManyWinners();
 
         // Validate places - проверка дубликатов без использования mapping
         for (uint256 i = 0; i < places.length; i++) {
-            require(places[i] > 0 && places[i] <= _distribution.length, "Invalid place");
-            require(winners[i] != address(0), "Zero winner address");
+            if (places[i] == 0 || places[i] > _distribution.length) revert InvalidPlace();
+            if (winners[i] == address(0)) revert ZeroWinnerAddress();
 
             // Проверка на дубликаты мест
             for (uint256 j = 0; j < i; j++) {
-                require(places[j] != places[i], "Duplicate place");
+                if (places[j] == places[i]) revert DuplicatePlace();
             }
         }
 
@@ -149,15 +180,15 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     }
 
     function claimPrize() external override onlyFinalized nonReentrant {
-        require(!_hasClaimed[msg.sender], "Already claimed");
+        if (_hasClaimed[msg.sender]) revert AlreadyClaimed();
 
         uint256 winnerIndex = _findWinnerIndex(msg.sender);
-        require(winnerIndex < _winners.length, "Not a winner");
+        if (winnerIndex >= _winners.length) revert NotAWinner();
 
         uint256 place = _winnerPlaces[winnerIndex];
         uint256 prizeAmount = _calculatePrizeAmount(place);
 
-        require(prizeAmount > 0, "No prize for this place");
+        if (prizeAmount == 0) revert NoPrizeForPlace();
 
         _hasClaimed[msg.sender] = true;
         _claimedAmounts[msg.sender] = prizeAmount;
@@ -166,7 +197,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         if (address(_token) == address(0)) {
             // ETH конкурс
             (bool success,) = msg.sender.call{value: prizeAmount}("");
-            require(success, "ETH transfer failed");
+            if (!success) revert EthTransferFailed();
         } else {
             // ERC20 конкурс - исправлено: переводим приз победителю, а не создателю
             SafeERC20.safeTransfer(_token, msg.sender, prizeAmount);
@@ -176,8 +207,8 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
     }
 
     function cancel(string calldata reason) external override onlyCreator {
-        require(!_isFinalized, "Contest already finalized");
-        require(!_isCancelled, "Already cancelled");
+        if (_isFinalized) revert ContestAlreadyFinalized();
+        if (_isCancelled) revert AlreadyCancelled();
 
         _isCancelled = true;
 
@@ -185,7 +216,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
         if (address(_token) == address(0)) {
             // ETH конкурс
             (bool success,) = _creator.call{value: _totalPrize}("");
-            require(success, "ETH refund failed");
+            if (!success) revert EthRefundFailed();
         } else {
             // ERC20 конкурс
             SafeERC20.safeTransfer(_token, _creator, _totalPrize);
@@ -207,7 +238,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
             oldBalance = address(this).balance;
             if (oldBalance > 0) {
                 (bool success,) = _treasury.call{value: oldBalance}("");
-                require(success, "ETH emergency transfer failed");
+                if (!success) revert EthEmergencyTransferFailed();
             }
         } else {
             // ERC20 конкурс
@@ -334,8 +365,8 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
 
     // Функция для вывода оставшихся средств после окончания конкурса
     function withdrawRemainingFunds() external onlyFactory {
-        require(_isFinalized, "Contest not finalized");
-        require(block.timestamp > _endTime + 30 days, "Too early for cleanup");
+        if (!_isFinalized) revert ContestNotFinalizedForWithdraw();
+        if (block.timestamp <= _endTime + 30 days) revert TooEarlyForCleanup();
 
         // Проверяем, все ли призы были выплачены
         bool allClaimedOrExpired = true;
@@ -346,8 +377,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
             }
         }
 
-        require(allClaimedOrExpired || block.timestamp > _endTime + 90 days, 
-                "Not all prizes claimed and not expired");
+        if (!(allClaimedOrExpired || block.timestamp > _endTime + 90 days)) revert NotAllPrizesClaimed();
 
         uint256 oldBalance;
         if (address(_token) == address(0)) {
@@ -355,7 +385,7 @@ contract ContestEscrow is IContestEscrow, ReentrancyGuard, AccessControl {
             oldBalance = address(this).balance;
             if (oldBalance > 0) {
                 (bool success, ) = _treasury.call{value: oldBalance}("");
-                require(success, "ETH transfer failed");
+                if (!success) revert EthTransferFailed();
             }
         } else {
             // ERC20 конкурс

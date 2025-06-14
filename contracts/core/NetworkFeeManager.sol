@@ -29,6 +29,7 @@ contract NetworkFeeManager is ReentrancyGuard {
         address creator;
         address token;
         uint256 feeAmount;
+        uint256 prizeAmount;
         uint256 createdAt;
         bool isRefunded;
         bool isWithdrawn;
@@ -133,6 +134,7 @@ contract NetworkFeeManager is ReentrancyGuard {
             creator: creator,
             token: token,
             feeAmount: feeAmount,
+            prizeAmount: prizeAmount,
             createdAt: block.timestamp,
             isRefunded: false,
             isWithdrawn: false
@@ -220,18 +222,24 @@ contract NetworkFeeManager is ReentrancyGuard {
             "Too early for refund"
         );
         
+        uint256 currentFee = calculateFee(block.chainid, fee.prizeAmount);
+        uint256 refundAmount = fee.feeAmount < currentFee ? fee.feeAmount : currentFee;
         fee.isRefunded = true;
-        
+
         if (fee.token == address(0)) {
-            require(address(this).balance >= fee.feeAmount, "Insufficient balance");
-            (bool success, ) = payable(fee.creator).call{value: fee.feeAmount}("");
+            require(address(this).balance >= refundAmount, "Insufficient balance");
+            require(availableETHFees[address(0)] >= refundAmount, "Insufficient fees");
+            availableETHFees[address(0)] -= refundAmount;
+            (bool success, ) = payable(fee.creator).call{value: refundAmount}("");
             require(success, "ETH refund failed");
         } else {
+            require(availableTokenFees[address(0)][fee.token] >= refundAmount, "Insufficient fees");
+            availableTokenFees[address(0)][fee.token] -= refundAmount;
             IERC20 tokenContract = IERC20(fee.token);
-            tokenContract.transfer(fee.creator, fee.feeAmount);
+            tokenContract.transfer(fee.creator, refundAmount);
         }
-        
-        emit FeeRefunded(contestId, fee.creator, fee.token, fee.feeAmount);
+
+        emit FeeRefunded(contestId, fee.creator, fee.token, refundAmount);
     }
     
     /*───────────────────────────  VIEW FUNCTIONS  ────────────────────────────*/
