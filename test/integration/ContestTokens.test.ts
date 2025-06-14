@@ -479,6 +479,7 @@ describe("Contest Token Integration Tests", function() {
       // корректные временные параметры.
       const afterEthFeeTime = await time.latest();
 
+
     // USDT конкурс
     const usdtTotalPrize = ethers.parseUnits("1000", await mockUSDT.decimals());
     const usdtFee = await networkFeeManager.calculateFee(31337, usdtTotalPrize);
