@@ -16,7 +16,9 @@ The contracts can be integrated into any DApp or backend to launch contests, hol
 * **PrizeManager** – keeps track of non‑monetary prizes.
 * **CreatorBadges** – ERC‑721 badges for active contest creators.
 * **PrizeTemplates** – helper library with common prize distributions.
+* 
 Contest metadata such as an IPFS description is passed via `contestMetadata` when creating a contest. The string is stored in each escrow and in `PrizeManager` so front ends can display details.
+
 
 ## Getting started
 
