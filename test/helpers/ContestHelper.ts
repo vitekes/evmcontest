@@ -17,9 +17,9 @@ export interface CreateContestOptions {
     /** Описание конкурса (по умолчанию: 'Test Description') */
     description?: string;
     /** Адрес токена для выплаты (по умолчанию: адрес нативной валюты 0x0) */
-    paymentToken?: string;
+    token?: string;
     /** Сумма призового фонда (по умолчанию: 1 ETH) */
-    prizeAmount?: bigint;
+    totalPrize?: bigint;
     /** Срок подачи заявок в секундах (по умолчанию: 7 дней) */
     submissionDeadline?: number;
     /** Срок голосования в секундах (по умолчанию: 3 дня) */
@@ -64,8 +64,8 @@ export async function createTestContest(
     // Устанавливаем значения по умолчанию
     const name = options.name || 'Test Contest';
     const description = options.description || 'Test Description';
-    const paymentToken = options.paymentToken || ethers.ZeroAddress;
-    const prizeAmount = options.prizeAmount || ethers.parseEther('1.0');
+    const token = options.token || ethers.ZeroAddress;
+    const totalPrize = options.totalPrize || ethers.parseEther('1.0');
     // Используем время блокчейна вместо Date.now() для избежания ошибки 'Start time in past'
     const now = Math.floor(Date.now() / 1000) + 60; // Добавляем 60 секунд для надежности
     const submissionDeadline = options.submissionDeadline || now + 7 * 24 * 60 * 60;
@@ -104,8 +104,8 @@ export async function createTestContest(
 
     // Параметры для создания конкурса согласно CreateContestParamsStruct
     const params = {
-        token: paymentToken, // Передаем адрес токена напрямую
-        totalPrize: prizeAmount,
+        token: token, // Передаем адрес токена напрямую
+        totalPrize: totalPrize,
         template: 4, // Используем CUSTOM template (enum PrizeTemplate.CUSTOM = 4)
         customDistribution: distributionArray, // Массив PrizeDistributionStruct
         jury: jurors,
@@ -124,16 +124,16 @@ export async function createTestContest(
         }
 
         // Проверяем баланс перед созданием конкурса
-        if (paymentToken === ethers.ZeroAddress) {
+        if (token === ethers.ZeroAddress) {
             // Получаем текущую комиссию сети
             const networkFee = await feeManager.networkFees(31337); // hardhat chainId
             console.log(`Комиссия сети: ${networkFee} базисных пунктов`);
 
             // Рассчитываем комиссию (fee = prize * feeRate / 10000)
-            const platformFee = prizeAmount * BigInt(networkFee) / 10000n;
-            const totalRequired = prizeAmount + platformFee;
+            const platformFee = totalPrize * BigInt(networkFee) / 10000n;
+            const totalRequired = totalPrize + platformFee;
 
-            console.log(`Сумма приза: ${ethers.formatEther(prizeAmount)} ETH`);
+            console.log(`Сумма приза: ${ethers.formatEther(totalPrize)} ETH`);
             console.log(`Комиссия платформы: ${ethers.formatEther(platformFee)} ETH`);
             console.log(`Всего требуется: ${ethers.formatEther(totalRequired)} ETH`);
 
@@ -150,18 +150,18 @@ export async function createTestContest(
         } else {
             // Если конкурс с токеном ERC20
             // Проверка существования токена
-            if (!paymentToken) {
+            if (!token) {
                 throw new Error("Адрес токена не определен");
             }
 
             // Проверяем одобрение токена
-            const tokenContract = await ethers.getContractAt("IERC20", paymentToken);
+            const tokenContract = await ethers.getContractAt("IERC20", token);
             const allowance = await tokenContract.allowance(creator.address, await contestFactory.getAddress());
 
-            if (allowance < prizeAmount) {
+            if (allowance < totalPrize) {
                 await tokenContract.connect(creator).approve(
                     await contestFactory.getAddress(),
-                    prizeAmount * 2n
+                    totalPrize * 2n
                 );
             }
 
@@ -348,6 +348,47 @@ export async function endContest(escrow: ContestEscrow): Promise<number> {
 }
 
 /**
+ * Generates start and end times for a contest relative to the current time.
+ * @param currentTime Current blockchain timestamp
+ * @param durationHours Contest duration in hours (default 24)
+ * @param delayHours Delay before start in hours (default 1)
+ */
+export function createContestTimeParams(
+    currentTime: number,
+    durationHours: number = 24,
+    delayHours: number = 1
+) {
+    const startTime = BigInt(currentTime + delayHours * 3600);
+    const endTime = BigInt(currentTime + (delayHours + durationHours) * 3600);
+    return { startTime, endTime };
+}
+
+/**
+ * Claims the prize for the provided winner and returns the actual received value
+ * taking gas costs into account.
+ * @param escrow ContestEscrow contract
+ * @param winner Signer claiming the prize
+ * @param expectedPrize Expected prize amount
+ */
+export async function verifyPrizeClaim(
+    escrow: ContestEscrow,
+    winner: any,
+    expectedPrize: bigint
+): Promise<bigint> {
+    const before = await ethers.provider.getBalance(winner.address);
+    const tx = await escrow.connect(winner).claimPrize();
+    const receipt = await tx.wait();
+    const gasUsed = receipt ? receipt.gasUsed * receipt.gasPrice : 0n;
+    const after = await ethers.provider.getBalance(winner.address);
+    const received = after + gasUsed - before;
+    const claimed = await escrow.hasClaimed(winner.address);
+    if (!claimed) {
+        throw new Error("Prize not marked as claimed");
+    }
+    return received;
+}
+
+/**
  * Генерирует массив случайных адресов для тестовых членов жюри
  * @param count - Количество адресов (по умолчанию 3)
  * @returns Массив адресов
@@ -399,5 +440,8 @@ export {
     createTestContest as createContest,
     simulateContestEnd as simulateContest,
     generateTestJury as generateJury,
-    generateTestWinners as generateWinners
+    generateTestWinners as generateWinners,
+    endContest,
+    createContestTimeParams,
+    verifyPrizeClaim
 };

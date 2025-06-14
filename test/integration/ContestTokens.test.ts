@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import { loadFixture, time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { 
     TEST_CONSTANTS, 
     deployFullPlatformFixture 
@@ -25,9 +25,8 @@ describe("ContestTokens", function () {
                 {
                     name: "ETH конкурс",
                     description: "Конкурс с призом в ETH",
-                    paymentToken: ethers.ZeroAddress, // Явно указываем ETH
-                    prizeAmount: TEST_CONSTANTS.SMALL_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 7200
+                    token: ethers.ZeroAddress, // Явно указываем ETH
+                    totalPrize: TEST_CONSTANTS.SMALL_PRIZE,
                 }
             );
 
@@ -76,8 +75,8 @@ describe("ContestTokens", function () {
                 {
                     name: "USDC конкурс",
                     description: "Конкурс с призом в USDC",
-                    paymentToken: usdcAddress,
-                    prizeAmount: ethers.parseUnits("1000", 6) // 1000 USDC
+                    token: usdcAddress,
+                    totalPrize: ethers.parseUnits("1000", 6) // 1000 USDC
                 }
             );
 
@@ -101,9 +100,8 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    paymentToken: await fixture.mockWETH.getAddress(),
-                    prizeAmount: TEST_CONSTANTS.MEDIUM_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 3600
+                    token: await fixture.mockWETH.getAddress(),
+                    totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                 }
             );
 
@@ -125,8 +123,7 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    prizeAmount: TEST_CONSTANTS.MEDIUM_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 3600
+                    totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                 }
             );
 
@@ -187,9 +184,8 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    paymentToken: await fixture.mockUSDC.getAddress(),
-                    prizeAmount: TEST_CONSTANTS.MEDIUM_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 3600
+                    token: await fixture.mockUSDC.getAddress(),
+                    totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                 }
             );
 
@@ -238,8 +234,7 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    prizeAmount: totalPrize,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 3600
+                    totalPrize: totalPrize,
                 }
             );
 
@@ -267,9 +262,8 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    paymentToken: await fixture.mockUSDT.getAddress(),
-                    prizeAmount: totalPrize,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 3600
+                    token: await fixture.mockUSDT.getAddress(),
+                    totalPrize: totalPrize,
                 }
             );
 
@@ -289,8 +283,7 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    prizeAmount: TEST_CONSTANTS.MEDIUM_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 7200
+                    totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                 }
             );
 
@@ -315,9 +308,8 @@ describe("ContestTokens", function () {
                 fixture.feeManager,
                 fixture.creator1,
                 {
-                    paymentToken: await fixture.mockWETH.getAddress(),
-                    prizeAmount: TEST_CONSTANTS.MEDIUM_PRIZE,
-                    submissionDeadline: Math.floor(Date.now() / 1000) + 7200
+                    token: await fixture.mockWETH.getAddress(),
+                    totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                 }
             );
 
