@@ -11,3 +11,10 @@ Available badges:
 5. `WHALE` – prizes totaling 100,000+ ETH.
 6. `VERIFIED_CREATOR` – manual verified status.
 7. `EARLY_ADOPTER` – among the first 100 creators.
+
+The badge contract emits events whenever a new badge is minted. Interfaces or front ends can listen to these events to show achievements to users. Badges are non-transferable to prevent trading.
+
+Example check for a badge:
+```solidity
+bool hasBadge = badges.balanceOf(user, BADGE_ID) > 0;
+```

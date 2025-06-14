@@ -9,3 +9,12 @@
 - `claimPrize(contestId, prizeIndex, winner)` — отметка получения приза.
 - `revealSecret(contestId, prizeIndex, secret)` — раскрытие секрета (например, промокода) победителю.
 - `getContestPrizes(contestId)` — получение структуры с перечнем всех призов конкурса.
+
+Призы могут быть трёх типов: `MONETARY`, `NON_MONETARY` и `PROMOCODE`. В случае промокода хранится лишь хэш секрета, а реальное значение открывается функцией `revealSecret`.
+
+Пример добавления промокода:
+```solidity
+prizeManager.addPrize(contestId, PrizeType.PROMOCODE, 0, 'Gift card', keccak256('code123'), block.timestamp + 30 days);
+```
+
+Получить сведения о призах можно через `getContestPrizes`, который возвращает массив структур с метаданными и статусом получения.

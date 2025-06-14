@@ -31,3 +31,5 @@ npm run test
 > Some networks require environment variables. Copy `env-example.js` to `.env` and fill in private keys and RPC URLs.
 
 More documentation is available inside the [docs](docs/) directory in both Russian and English.
+Start exploring at docs/en/index.md (English) or docs/ru/index.md (Russian).
+

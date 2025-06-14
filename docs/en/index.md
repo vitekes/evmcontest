@@ -12,3 +12,5 @@ This folder contains the English version of the documentation. Main sections:
 - [Prizes and PrizeManager](prizes.md)
 
 The Russian documentation can be found in [`docs/ru`](../ru/index.md).
+
+Start with [Project overview](overview.md) and continue with [Usage guide](usage.md) to deploy the contracts locally. The repository README also contains a quick start.
