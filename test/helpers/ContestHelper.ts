@@ -148,14 +148,17 @@ export async function createTestContest(
     ));
     const now = await time.latest();
     const uniqueId = options.uniqueId || Math.floor(Math.random() * 1000000);
-    
-    // Используем startTime и endTime из параметров, если они указаны
-    const startTime = options.startTime ? options.startTime : 
-        BigInt(now + (options.startDelay || TEST_CONSTANTS.DEFAULT_START_DELAY) + (uniqueId % 100));
 
-    const endTime = options.endTime ? options.endTime :
-        BigInt(now + (options.startDelay || TEST_CONSTANTS.DEFAULT_START_DELAY) + 
-        (options.duration || TEST_CONSTANTS.DEFAULT_DURATION));
+    // Временные параметры конкурса
+    const startDelay = options.startDelay ?? TEST_CONSTANTS.DEFAULT_START_DELAY;
+    const duration = options.duration ?? TEST_CONSTANTS.DEFAULT_DURATION;
+
+    // Используем startTime и endTime из параметров, если они указаны
+    const startTime = options.startTime ??
+        BigInt(now + startDelay + (uniqueId % 100));
+
+    const endTime = options.endTime ??
+        startTime + BigInt(duration);
 
     const config = {
         token: options.token || ethers.ZeroAddress,

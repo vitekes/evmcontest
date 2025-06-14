@@ -359,7 +359,7 @@ describe("ContestEscrow", function () {
                     totalPrize: TEST_CONSTANTS.MEDIUM_PRIZE,
                     duration: 7200,
                     jury: [fixture.jury1.address, fixture.jury2.address],
-                    startDelay: 10
+                    startDelay: 100
                 }
             );
 
@@ -442,7 +442,7 @@ describe("ContestEscrow", function () {
 
             await expectRevertWithReason(
                 escrow.connect(fixture.creator1).emergencyWithdraw("Direct call"),
-                "No emergency role"
+                "Only factory can call this"
             );
         });
     });
