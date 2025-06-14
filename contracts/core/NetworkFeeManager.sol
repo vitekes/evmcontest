@@ -207,9 +207,10 @@ contract NetworkFeeManager is ReentrancyGuard {
         emit FeeWithdrawn(fee.token, fee.feeAmount, treasury);
     }
     
-    function refundUnusedFee(uint256 contestId) external onlyOwner nonReentrant {
+    function refundUnusedFee(uint256 contestId) external nonReentrant {
         ContestFee storage fee = contestFees[contestId];
         require(fee.creator != address(0), "Contest not found");
+        require(msg.sender == fee.creator, "Only contest creator");
         require(!bannedCreators[fee.creator], "Creator is banned");
         require(!fee.isWithdrawn, "Already withdrawn");
         require(!fee.isRefunded, "Already refunded");
