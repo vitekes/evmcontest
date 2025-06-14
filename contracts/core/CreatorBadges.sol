@@ -34,8 +34,8 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
     }
     
     struct BadgeInfo {
-        string description;
-        string imageUri;
+        bytes32 description;
+        bytes32 imageUri;
         uint256 minContests;
         uint256 minVolume;
         bool isActive;
@@ -167,56 +167,56 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
 
     function _initializeBadges() internal {
         badgeInfo[FIRST_CONTEST] = BadgeInfo({
-            description: "Created your first contest! Welcome to the community!",
-            imageUri: "ipfs://QmFirstContestBadge",
+            description: 0x4372656174656420796f757220666972737420636f6e74657374212057656c63,
+            imageUri: 0x697066733a2f2f516d4669727374436f6e746573744261646765,
             minContests: 1,
             minVolume: 0,
             isActive: true
         });
         
         badgeInfo[CONTEST_VETERAN] = BadgeInfo({
-            description: "Created 10+ contests. You're getting the hang of this!",
-            imageUri: "ipfs://QmVeteranBadge",
+            description: 0x437265617465642031302b20636f6e74657374732e20596f7527726520676574,
+            imageUri: 0x697066733a2f2f516d5665746572616e4261646765,
             minContests: 10,
             minVolume: 0,
             isActive: true
         });
         
         badgeInfo[CONTEST_MASTER] = BadgeInfo({
-            description: "Created 50+ contests. True contest creation master!",
-            imageUri: "ipfs://QmMasterBadge",
+            description: 0x437265617465642035302b20636f6e74657374732e205472756520636f6e7465,
+            imageUri: 0x697066733a2f2f516d4d61737465724261646765,
             minContests: 50,
             minVolume: 0,
             isActive: true
         });
         
         badgeInfo[BIG_SPENDER] = BadgeInfo({
-            description: "Distributed $10,000+ in total prizes. Generous creator!",
-            imageUri: "ipfs://QmBigSpenderBadge",
+            description: 0x4469737472696275746564202431302c3030302b20696e20746f74616c207072,
+            imageUri: 0x697066733a2f2f516d4269675370656e6465724261646765,
             minContests: 0,
             minVolume: 10_000 ether,
             isActive: true
         });
         
         badgeInfo[WHALE] = BadgeInfo({
-            description: "Distributed $100,000+ in total prizes. Legendary!",
-            imageUri: "ipfs://QmWhaleBadge",
+            description: 0x446973747269627574656420243130302c3030302b20696e20746f74616c2070,
+            imageUri: 0x697066733a2f2f516d5768616c654261646765,
             minContests: 0,
             minVolume: 100_000 ether,
             isActive: true
         });
         
         badgeInfo[VERIFIED_CREATOR] = BadgeInfo({
-            description: "Verified by the platform. Trusted and authentic!",
-            imageUri: "ipfs://QmVerifiedBadge",
+            description: 0x56657269666965642062792074686520706c6174666f726d2e20547275737465,
+            imageUri: 0x697066733a2f2f516d56657269666965644261646765,
             minContests: 0,
             minVolume: 0,
             isActive: true
         });
         
         badgeInfo[EARLY_ADOPTER] = BadgeInfo({
-            description: "One of the first 100 contest creators. Pioneer!",
-            imageUri: "ipfs://QmEarlyAdopterBadge",
+            description: 0x4f6e65206f66207468652066697273742031303020636f6e7465737420637265,
+            imageUri: 0x697066733a2f2f516d4561726c7941646f707465724261646765,
             minContests: 1,
             minVolume: 0,
             isActive: true
