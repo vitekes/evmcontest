@@ -341,36 +341,16 @@ describe("Contest Token Integration Tests", function() {
         const receipt = await tx.wait();
         console.log(`✅ Транзакция подтверждена: ${receipt?.hash || 'нет хеша'}`);
 
-        // Получаем ID конкурса из событий
-        let contestId;
-        if (receipt && receipt.logs) {
-          for (const log of receipt.logs) {
-            try {
-              const parsed = contestFactory.interface.parseLog({
-                topics: log.topics,
-                data: log.data
-              });
-
-              if (parsed && parsed.name === "ContestCreated") {
-                contestId = parsed.args.contestId;
-                console.log(`✅ Конкурс создан: ID=${contestId}`);
-                break;
-              }
-            } catch (e) {
-              // Игнорируем ошибки парсинга
-            }
-          }
-        }
-
-        if (!contestId) {
-          console.log("⚠️ Не удалось получить ID из событий, пробуем lastId");
-          const lastId = await contestFactory.lastId();
-          contestId = lastId;
-          console.log(`Используем lastId как contestId: ${contestId}`);
-        }
+        // Определяем contestId по последнему значению lastId после выполнения
+        // транзакции. lastId увеличивается постфиксно, поэтому он указывает на
+        // следующий свободный идентификатор. ID только что созданного конкурса
+        // равен lastId - 1.
+        const lastIdAfter = await contestFactory.lastId();
+        let contestId = lastIdAfter - BigInt(1);
+        console.log(`Используем lastId-1 как contestId: ${contestId}`);
 
         // Теперь получаем эскроу контракт
-        const escrowAddress = await contestFactory.escrows(Number(contestId) - 1);
+        const escrowAddress = await contestFactory.escrows(Number(contestId));
         const escrow = await ethers.getContractAt("ContestEscrow", escrowAddress);
 
         usdcContestResult = {
