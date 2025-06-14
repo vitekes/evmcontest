@@ -54,6 +54,11 @@ await escrow.declareWinners([
 ], [1, 2, 3]);
 ```
 The places correspond to the configured prize distribution. The escrow records the winners and finalizes the contest.
+After winners are declared you can fetch the original metadata:
+```javascript
+const info = await escrow.getContestParams();
+console.log(info.metadata);
+```
 
 ## Claiming prizes
 

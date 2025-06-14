@@ -1,10 +1,13 @@
 # EVMContest
 
-A set of Solidity smart contracts and scripts for running prize contests on EVM compatible networks. The project provides everything required to organise a fully on-chain competition: a factory for deploying contest escrows, flexible fee management, token validation and optional modules such as creator badges and the prize manager.
+EVMContest is a toolkit for launching prize competitions on any EVM compatible
+network. It bundles a factory for deploying contest escrows, flexible fee
+management, token validation and optional modules such as NFT badges and a prize
+manager.
 
-The aim is to deliver a ready-made toolkit that any DApp can plug into.  EVMContest keeps track of every contest, collects usage statistics and lets communities reward creators with NFT achievements.  Its modular design means you can pick only the pieces you need or extend the contracts with new functionality.
+The goal is to provide a ready-made component that any DApp can plug into. The system records every contest, collects usage statistics and lets communities reward creators with NFT achievements. Its modular design lets you use only the parts you need or extend the contracts with new features.
 
-The contracts can be integrated into any DApp or backend to launch contests, hold prizes securely and pay rewards to winners once the jury has reached a decision.
+The contracts can be integrated into any DApp or backend to launch contests, hold prizes securely and distribute rewards once a jury reaches a decision.
 
 * **ContestFactory** – deploys and controls escrows for each contest.
 * **ContestEscrow** – holds prizes and manages winners.
@@ -13,6 +16,9 @@ The contracts can be integrated into any DApp or backend to launch contests, hol
 * **PrizeManager** – keeps track of non‑monetary prizes.
 * **CreatorBadges** – ERC‑721 badges for active contest creators.
 * **PrizeTemplates** – helper library with common prize distributions.
+* 
+Contest metadata such as an IPFS description is passed via `contestMetadata` when creating a contest. The string is stored in each escrow and in `PrizeManager` so front ends can display details.
+
 
 ## Getting started
 
@@ -53,6 +59,8 @@ await factory.createContest({
 // later
 const escrow = await ethers.getContractAt('ContestEscrow', escrowAddress);
 await escrow.declareWinners([winner1, winner2, winner3], [1, 2, 3]);
+const params = await escrow.getContestParams();
+console.log(params.metadata);
 ```
 
 Each winner then calls `claimPrize()` on the escrow to receive funds.
