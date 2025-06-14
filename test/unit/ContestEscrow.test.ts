@@ -261,11 +261,12 @@ describe("ContestEscrow", function () {
                 .declareWinners([fixture.winner1.address], [1]);
 
             await escrow.connect(fixture.winner1).claimPrize();
-            
-            // Просто проверяем, что транзакция отменяется без уточнения причины
-            await expect(
-                escrow.connect(fixture.winner1).claimPrize()
-            ).to.be.reverted;
+
+            // Expect revert with specific reason on second claim attempt
+            await expectRevertWithReason(
+                escrow.connect(fixture.winner1).claimPrize(),
+                "Already claimed"
+            );
         });
 
         it("should reject claiming by non-winners", async function () {
