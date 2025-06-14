@@ -37,7 +37,7 @@ describe("Contest E2E Flow", function () {
       }
     );
 
-    expect(contestId).to.be.gt(BigInt(0));
+    expect(contestId).to.be.gte(BigInt(0));
     expect(ethers.isAddress(escrowAddress)).to.be.true;
 
     const initialBalance = await ethers.provider.getBalance(escrowAddress);

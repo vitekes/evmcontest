@@ -238,7 +238,10 @@ describe("ContestFactory", function() {
 
             await expect(
                 createBasicContest(fixture, fixture.creator1)
-            ).to.be.revertedWith("Wait between contests");
+            ).to.be.revertedWithCustomError(
+                fixture.contestFactory,
+                "WaitBetweenContests"
+            );
         });
 
         it("should allow contest creation after interval", async function() {
