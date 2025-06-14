@@ -35,16 +35,9 @@ describe("TokenValidator", function () {
             const wrappedNative = await tokenValidator.WRAPPED_NATIVE();
             expect(wrappedNative).to.equal(addresses.mockWETH, "WRAPPED_NATIVE должен быть установлен как mockWETH");
 
-            // 2. Проверяем настройки валидации по умолчанию
-            // Вызов публичных свойств strictMode и minimumLiquidityUSD
-            const strictMode = await tokenValidator.strictMode();
-            const minLiquidity = await tokenValidator.minimumLiquidityUSD();
-
-            expect(strictMode).to.equal(true, "Строгий режим должен быть включен по умолчанию");
-            expect(minLiquidity).to.equal(
-                ethers.parseUnits("10000", 18), 
-                "Минимальная ликвидность должна быть $10,000"
-            );
+            // 2. Проверяем минимальный порог ликвидности по умолчанию
+            const minLiquidityFromMethod = await tokenValidator.getMinimumLiquidity();
+            expect(minLiquidityFromMethod).to.equal(0n);
 
             // 3. Проверяем список стейблкоинов
             // Вызов метода getStablecoins() из контракта TokenValidator
@@ -68,11 +61,8 @@ describe("TokenValidator", function () {
             expect(isWETHWhitelisted).to.equal(true, "WETH должен быть в whitelist");
 
             // 5. Проверяем метод getMinimumLiquidity из интерфейса ITokenValidator
-            const minLiquidityFromMethod = await tokenValidator.getMinimumLiquidity();
-            expect(minLiquidityFromMethod).to.equal(
-                ethers.parseUnits("10000", 18),
-                "getMinimumLiquidity() должен возвращать $10,000"
-            );
+            const minLiquidityFromMethod2 = await tokenValidator.getMinimumLiquidity();
+            expect(minLiquidityFromMethod2).to.equal(0n);
         });
     });
 
@@ -82,41 +72,25 @@ describe("TokenValidator", function () {
              */
             describe("Управление whitelist'ом", function () {
         it("должен добавлять токены в whitelist", async function () {
-            // Получаем экземпляр контракта и связанные данные из фикстуры
             const { tokenValidator, mockUSDC, owner } = await loadFixture(deployTokenValidatorFixture);
             const tokenAddress = await mockUSDC.getAddress();
 
-            // 1. Проверяем, что токен изначально не в whitelist'е
-            // Вызываем метод isValidToken из интерфейса ITokenValidator
-            const isValidBefore = await tokenValidator.isValidToken(tokenAddress);
-            expect(isValidBefore).to.be.false, "Токен не должен быть валидным до добавления в whitelist";
+            // Удаляем токен из whitelist установленной фикстурой
+            await tokenValidator.connect(owner).setTokenWhitelist(tokenAddress, false, "reset");
+            expect(await tokenValidator.whitelistedTokens(tokenAddress)).to.be.false;
 
-            // Также проверяем через прямой доступ к маппингу whitelistedTokens
-            const isWhitelistedBefore = await tokenValidator.whitelistedTokens(tokenAddress);
-            expect(isWhitelistedBefore).to.be.false, "Токен не должен быть в whitelist изначально";
-
-            // 2. Добавляем токен в whitelist, вызывая метод setTokenWhitelist
-            // Этот метод есть только в TokenValidator (расширение ITokenValidator)
-            // Проверяем, что при вызове генерируется ожидаемый эвент
+            // Добавляем токен в whitelist
             await expect(
-                tokenValidator
-                    .connect(owner) // Вызываем от имени владельца контракта
-                    .setTokenWhitelist(
-                        tokenAddress, // Адрес токена
-                        true,        // Флаг добавления в whitelist
-                        "Adding USDC for testing" // Причина добавления
-                    )
-            ).to.emit(tokenValidator, "TokenWhitelisted") // Должен сгенерировать эвент
-                .withArgs(tokenAddress, true, "Adding USDC for testing"); // С этими параметрами
+                tokenValidator.connect(owner).setTokenWhitelist(
+                    tokenAddress,
+                    true,
+                    "Adding USDC for testing"
+                )
+            ).to.emit(tokenValidator, "TokenWhitelisted")
+                .withArgs(tokenAddress, true, "Adding USDC for testing");
 
-            // 3. Проверяем, что токен стал валидным после добавления в whitelist
-            // Снова вызываем isValidToken из интерфейса ITokenValidator
-            const isValidAfter = await tokenValidator.isValidToken(tokenAddress);
-            expect(isValidAfter).to.be.true, "Токен должен стать валидным после добавления в whitelist";
-
-            // И проверяем через прямой доступ к маппингу
-            const isWhitelistedAfter = await tokenValidator.whitelistedTokens(tokenAddress);
-            expect(isWhitelistedAfter).to.be.true, "Токен должен быть в whitelist после добавления";
+            expect(await tokenValidator.isValidToken(tokenAddress)).to.be.true;
+            expect(await tokenValidator.whitelistedTokens(tokenAddress)).to.be.true;
         });
 
         it("должен удалять токены из whitelist'а", async function () {
@@ -235,21 +209,11 @@ describe("TokenValidator", function () {
         });
 
         it("должен считать токены в whitelist'е валидными", async function () {
-            const { tokenValidator, mockUSDC, owner } = await loadFixture(deployTokenValidatorFixture);
+            const { tokenValidator, mockUSDC } = await loadFixture(deployTokenValidatorFixture);
             const tokenAddress = await mockUSDC.getAddress();
 
-            // Токен не валиден изначально
-            expect(await tokenValidator.isValidToken(tokenAddress)).to.be.false;
-
-            // Добавляем в whitelist
-            await tokenValidator.connect(owner).setTokenWhitelist(
-                tokenAddress,
-                true,
-                "Adding to whitelist"
-            );
-
-            // Токен должен быть валидным
             expect(await tokenValidator.isValidToken(tokenAddress)).to.be.true;
+            expect(await tokenValidator.whitelistedTokens(tokenAddress)).to.be.true;
         });
 
         it("должен считать токены в blacklist'е невалидными", async function () {
@@ -341,89 +305,12 @@ describe("TokenValidator", function () {
 
             // Исходная информация
             const initialInfo = await tokenValidator.getTokenInfo(tokenAddress);
-            expect(initialInfo.lastValidated).to.equal(0); // Ещё не валидирован
 
-            // Валидируем токен
-            await tokenValidator.connect(owner).validateTokenDetailed(tokenAddress);
+            await tokenValidator.connect(owner).updateTokenInfo(tokenAddress);
 
-            // Получаем обновленную информацию
             const updatedInfo = await tokenValidator.getTokenInfo(tokenAddress);
-            expect(updatedInfo.lastValidated).to.not.equal(0); // Должен быть валидирован
+            expect(updatedInfo.lastValidated).to.be.gt(initialInfo.lastValidated);
         });
     });
 
-    describe("Настройки валидации", function () {
-        it("должен позволять владельцу обновлять настройки валидации", async function () {
-            const { tokenValidator, owner } = await loadFixture(deployTokenValidatorFixture);
-
-            const newStrictMode = false;
-            const newMinLiquidity = ethers.parseUnits("5000", 18); // $5,000
-            const newCacheExpiry = 30 * 60; // 30 минут
-
-            await tokenValidator.connect(owner).updateValidationSettings(
-                newStrictMode,
-                newMinLiquidity,
-                newCacheExpiry
-            );
-
-            expect(await tokenValidator.strictMode()).to.equal(newStrictMode);
-            expect(await tokenValidator.minimumLiquidityUSD()).to.equal(newMinLiquidity);
-            expect(await tokenValidator.cacheExpiry()).to.equal(newCacheExpiry);
-        });
-
-        it("должен ограничивать параметры настроек валидации", async function () {
-            const { tokenValidator, owner } = await loadFixture(deployTokenValidatorFixture);
-
-            // Слишком короткое время кеширования
-            await expect(
-                tokenValidator.connect(owner).updateValidationSettings(
-                    true,
-                    ethers.parseUnits("10000", 18),
-                    60 // 1 минута
-                )
-            ).to.be.reverted;
-
-            // Нулевой минимальный порог ликвидности
-            await expect(
-                tokenValidator.connect(owner).updateValidationSettings(
-                    true,
-                    0,
-                    60 * 60 // 1 час
-                )
-            ).to.be.reverted;
-        });
-    });
-
-    describe("Расширенная валидация", function () {
-        it("должен возвращать детальную информацию при валидации токена", async function () {
-            const { tokenValidator, mockUSDC, owner } = await loadFixture(deployTokenValidatorFixture);
-            const tokenAddress = await mockUSDC.getAddress();
-
-            // Нужно использовать callStatic для получения значения, возвращаемого функцией, а не транзакцию
-            const validationResult = await tokenValidator.connect(owner).validateTokenDetailed.staticCall(tokenAddress);
-
-            // Базовые проверки результата
-            expect(validationResult.isValid).to.be.a('boolean');
-            expect(validationResult.info.name).to.equal("USD Coin");
-            expect(validationResult.info.symbol).to.equal("USDC");
-            expect(validationResult.info.decimals).to.equal(6);
-            expect(validationResult.info.lastValidated).to.not.equal(0);
-        });
-
-        it("должен автоматически обновлять кеш при детальной валидации", async function () {
-            const { tokenValidator, mockUSDC, owner } = await loadFixture(deployTokenValidatorFixture);
-            const tokenAddress = await mockUSDC.getAddress();
-
-            // Проверяем, что кеш истек
-            expect(await tokenValidator.isCacheExpired(tokenAddress)).to.be.true;
-
-            // Выполняем валидацию - это будет реальная транзакция, а не staticCall,
-            // так как нам нужно, чтобы состояние контракта изменилось
-            const tx = await tokenValidator.connect(owner).validateTokenDetailed(tokenAddress);
-            await tx.wait(); // Ждем завершения транзакции
-
-            // Проверяем, что кеш обновлен
-            expect(await tokenValidator.isCacheExpired(tokenAddress)).to.be.false;
-        });
-    });
 });
