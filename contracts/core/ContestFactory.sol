@@ -43,6 +43,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     // Ограничения на время конкурса
     uint256 public constant MAX_CONTEST_DURATION = 270 days;
     uint256 public constant MIN_CONTEST_DURATION = 1 hours;
+    uint256 public constant MAX_EMERGENCY_BATCH = 200;
 
     /*───────────────────────────  EVENTS  ────────────────────────────────────*/
 
@@ -118,6 +119,12 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     error EscrowNotFound();
     error NoEthToRecover();
     error NoTokensToRecover();
+    error BatchTooLarge();
+    error InvalidAddress();
+    error InvalidEndTime();
+    error InvalidPlace();
+    error InvalidPercentage();
+    error DistributionTotalInvalid();
 
     /*───────────────────────────  STRUCTS  ───────────────────────────────────*/
 
@@ -155,12 +162,14 @@ contract ContestFactory is ReentrancyGuard, Pausable {
         address _tokenValidator,
         address _prizeManager
     ) {
-        require(_escrowImpl != address(0), "Invalid escrow impl");
-        require(_feeManager != address(0), "Invalid fee manager");
-        require(_prizeTemplates != address(0), "Invalid prize templates");
-        require(_badges != address(0), "Invalid badges");
-        require(_tokenValidator != address(0), "Invalid token validator");
-        require(_prizeManager != address(0), "Invalid prize manager");
+        if (
+            _escrowImpl == address(0) ||
+            _feeManager == address(0) ||
+            _prizeTemplates == address(0) ||
+            _badges == address(0) ||
+            _tokenValidator == address(0) ||
+            _prizeManager == address(0)
+        ) revert InvalidAddress();
 
         owner = msg.sender;
         escrowImpl = _escrowImpl;
@@ -207,7 +216,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
         // Валидация базовых параметров
         require(params.totalPrize > 0, "Prize must be positive");
         if (params.startTime < block.timestamp + TIME_BUFFER) revert StartTimeTooSoon();
-        require(params.endTime > params.startTime, "Invalid end time");
+        if (params.endTime <= params.startTime) revert InvalidEndTime();
 
         uint256 duration = params.endTime - params.startTime;
         require(duration >= MIN_CONTEST_DURATION, "Contest too short");
@@ -355,11 +364,11 @@ contract ContestFactory is ReentrancyGuard, Pausable {
 
             uint256 totalPercentage = 0;
             for (uint256 i = 0; i < customDistribution.length; i++) {
-                require(customDistribution[i].place > 0, "Invalid place");
-                require(customDistribution[i].percentage > 0, "Invalid percentage");
+                if (customDistribution[i].place == 0) revert InvalidPlace();
+                if (customDistribution[i].percentage == 0) revert InvalidPercentage();
                 totalPercentage += customDistribution[i].percentage;
             }
-            require(totalPercentage == 10000, "Distribution must total 100%");
+            if (totalPercentage != 10000) revert DistributionTotalInvalid();
 
             return customDistribution;
         } else {
@@ -485,6 +494,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     onlyOwner
     whenNotPaused
     {
+        if (contestIds.length > MAX_EMERGENCY_BATCH) revert BatchTooLarge();
         uint256 successCount = 0;
 
         for (uint256 i = 0; i < contestIds.length; i++) {

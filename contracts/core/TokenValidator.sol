@@ -29,6 +29,9 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
     // Список стейблкоинов для проверки ликвидности
     address[] public stablecoins;
 
+    // Токены с ребейз-механикой
+    mapping(address => bool) public rebaseTokens;
+
     // Настройки сети
     address public immutable WRAPPED_NATIVE; // WETH, WBNB, POL и т.д.
     uint256 public immutable CHAIN_ID;
@@ -39,6 +42,7 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
     event TokenBlacklisted(address indexed token, bool status, string reason);
     event TokenInfoUpdated(address indexed token, TokenInfo info);
     event StablecoinUpdated(address indexed stablecoin, bool added);
+    event RebaseTokenUpdated(address indexed token, bool isRebase);
 
     /*───────────────────────────  STRUCTS  ───────────────────────────────────*/
 
@@ -320,6 +324,12 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
         emit TokenInfoUpdated(token, info);
     }
 
+    /// @notice Отмечает токен как ребейз-токен
+    function setRebaseToken(address token, bool isRebase) external onlyOwner validAddress(token) {
+        rebaseTokens[token] = isRebase;
+        emit RebaseTokenUpdated(token, isRebase);
+    }
+
     /*───────────────────────────  VIEW FUNCTIONS  ────────────────────────────*/
 
     /// @notice Получает список всех стейблкоинов
@@ -456,6 +466,7 @@ contract TokenValidator is ITokenValidator, Ownable, ReentrancyGuard {
 
     /// @dev Проверяет, является ли токен стейблкоином
     function _isStablecoin(address token) internal view returns (bool) {
+        if (rebaseTokens[token]) return false;
         for (uint i = 0; i < stablecoins.length; i++) {
             if (stablecoins[i] == token) return true;
         }

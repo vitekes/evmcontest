@@ -432,6 +432,13 @@ describe("PrizeManager", function() {
       expect(count).to.equal(3);
     });
 
+    it("should page prizes correctly", async function() {
+      const page = await prizeManager.getPrizesPaged(contestId, 1, 2);
+      expect(page.length).to.equal(2);
+      expect(page[0].metadata).to.equal("Prize 2");
+      expect(page[1].metadata).to.equal("Prize 3");
+    });
+
     it("should get monetary prizes total", async function() {
       const total = await prizeManager.getMonetaryPrizesTotal(contestId);
       expect(total).to.equal(parseEther("3"));
