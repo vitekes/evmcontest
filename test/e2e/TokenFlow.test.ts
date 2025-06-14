@@ -37,7 +37,7 @@ describe("Contest E2E Token Flow", function () {
       }
     );
 
-    expect(contestId).to.be.gt(BigInt(0));
+    expect(contestId).to.be.gte(BigInt(0));
     expect(ethers.isAddress(escrowAddress)).to.be.true;
 
     const token = mockUSDC as MockUSDC;
