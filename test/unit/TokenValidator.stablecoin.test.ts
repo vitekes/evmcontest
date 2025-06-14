@@ -17,19 +17,19 @@ describe("TokenValidator - Тесты для стейблкоинов", function
 
     // Деплоим WETH
     const mockWETH = await ethers.getContractFactory("MockERC20");
-    const weth = await mockWETH.deploy("Wrapped Ether", "WETH", 18);
+    const weth = await mockWETH.deploy("Wrapped Ether", "WETH", 18, 0);
     wethAddress = await weth.getAddress();
 
     // Деплоим стейблкоины
     usdc = await ethers.getContractFactory("MockERC20")
-      .then(factory => factory.deploy("USD Coin", "USDC", 6));
+      .then(factory => factory.deploy("USD Coin", "USDC", 6, 0));
 
     dai = await ethers.getContractFactory("MockERC20")
-      .then(factory => factory.deploy("Dai Stablecoin", "DAI", 18));
+      .then(factory => factory.deploy("Dai Stablecoin", "DAI", 18, 0));
 
     // Деплоим обычный токен
     randomToken = await ethers.getContractFactory("MockERC20")
-      .then(factory => factory.deploy("Random Token", "RND", 18));
+      .then(factory => factory.deploy("Random Token", "RND", 18, 0));
 
     // Деплоим валидатор
     const initialStablecoins = [await usdc.getAddress()];
@@ -42,9 +42,9 @@ describe("TokenValidator - Тесты для стейблкоинов", function
       expect(await tokenValidator.isStablecoin(await usdc.getAddress())).to.equal(true);
     });
 
-    it("Должен правильно определять стейблкоины по символу", async function () {
-      // DAI не был добавлен в initialStablecoins, но должен определяться по символу
-      expect(await tokenValidator.isStablecoin(await dai.getAddress())).to.equal(true);
+    it("Токены вне списка не считаются стейблкоинами по умолчанию", async function () {
+      // DAI не был добавлен в initialStablecoins
+      expect(await tokenValidator.isStablecoin(await dai.getAddress())).to.equal(false);
     });
 
     it("Должен правильно определять не-стейблкоины", async function () {
@@ -59,12 +59,12 @@ describe("TokenValidator - Тесты для стейблкоинов", function
   describe("Управление стейблкоинами", function () {
     it("Владелец может добавить токен в список стейблкоинов", async function () {
       // Создаем новый токен
-      const newToken = await ethers.getContractFactory("MockERC20")
-        .then(factory => factory.deploy("Test Token", "TEST", 18));
+    const newToken = await ethers.getContractFactory("MockERC20")
+      .then(factory => factory.deploy("Test Token", "TEST", 18, 0));
       const tokenAddress = await newToken.getAddress();
 
       // Добавляем в список стейблкоинов
-      await tokenValidator.connect(owner).manageStablecoin(tokenAddress, true);
+      await tokenValidator.connect(owner).setTokenIsStablecoin(tokenAddress, true);
 
       // Проверяем, что токен определяется как стейблкоин
       expect(await tokenValidator.isStablecoin(tokenAddress)).to.equal(true);
@@ -77,7 +77,7 @@ describe("TokenValidator - Тесты для стейблкоинов", function
       expect(await tokenValidator.isStablecoin(usdcAddress)).to.equal(true);
 
       // Удаляем из списка стейблкоинов
-      await tokenValidator.connect(owner).manageStablecoin(usdcAddress, false);
+      await tokenValidator.connect(owner).setTokenIsStablecoin(usdcAddress, false);
 
       // Проверяем, что USDC больше не в списке (но может определяться по символу)
       const stablecoinsAfter = await tokenValidator.getStablecoins();
@@ -86,7 +86,7 @@ describe("TokenValidator - Тесты для стейблкоинов", function
 
     it("Обычный пользователь не может управлять списком стейблкоинов", async function () {
       const newTokenAddress = await randomToken.getAddress();
-      await expect(tokenValidator.connect(user).manageStablecoin(newTokenAddress, true))
+      await expect(tokenValidator.connect(user).setTokenIsStablecoin(newTokenAddress, true))
         .to.be.revertedWithCustomError(tokenValidator, "OwnableUnauthorizedAccount");
     });
 
@@ -108,31 +108,22 @@ describe("TokenValidator - Тесты для стейблкоинов", function
   });
 
   describe("Интеграционные тесты для стейблкоинов", function () {
-    it("Должен добавлять новые токены в список через manageStablecoin", async function () {
+    it("Должен добавлять новые токены в список через setTokenIsStablecoin", async function () {
       // Получаем начальный список стейблкоинов
       const initialStablecoins = await tokenValidator.getStablecoins();
       const initialCount = initialStablecoins.length;
 
       // Добавляем новый токен
       const newToken = await ethers.getContractFactory("MockERC20")
-        .then(factory => factory.deploy("New Stable", "NUSD", 18));
+        .then(factory => factory.deploy("New Stable", "NUSD", 18, 0));
       const tokenAddress = await newToken.getAddress();
 
-      await tokenValidator.connect(owner).manageStablecoin(tokenAddress, true);
+      await tokenValidator.connect(owner).setTokenIsStablecoin(tokenAddress, true);
 
       // Проверяем, что список обновился
       const updatedStablecoins = await tokenValidator.getStablecoins();
       expect(updatedStablecoins.length).to.equal(initialCount + 1);
       expect(updatedStablecoins).to.include(tokenAddress);
-    });
-
-    it("Должен правильно определять стейблкоины с префиксом USD", async function () {
-      // Создаем токен с префиксом USD
-      const usdToken = await ethers.getContractFactory("MockERC20")
-        .then(factory => factory.deploy("USD Test Token", "USDTEST", 18));
-
-      // Проверяем определение по префиксу
-      expect(await tokenValidator.isStablecoin(await usdToken.getAddress())).to.equal(true);
     });
   });
 });
