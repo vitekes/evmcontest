@@ -1,13 +1,13 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
+
 import { 
-    TEST_CONSTANTS, 
-    deployFullPlatformFixture 
-} from "../fixtures";
-import { 
-    createTestContest, 
-    endContest
+  createTestContest, 
+  endContest,
+  createContestTimeParams,
+  generateTestJury
 } from "../helpers/ContestHelper";
 
 describe("ContestTokens", function () {
@@ -42,30 +42,29 @@ describe("ContestTokens", function () {
             expect(balance).to.equal(TEST_CONSTANTS.SMALL_PRIZE);
         });
 
-        it("должен корректно инициализировать конкурс с USDC", async function () {
-            const fixture = await loadFixture(deployFullPlatformFixture);
+        console.log(`Транзакция отправлена: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`✅ Транзакция подтверждена: ${receipt?.hash || 'нет хеша'}`);
 
-            // Получаем адрес USDC токена
-            const usdcAddress = await fixture.mockUSDC.getAddress();
-            console.log(`Адрес USDC: ${usdcAddress}`);
+        // Получаем ID конкурса из событий
+        let contestId;
+        if (receipt && receipt.logs) {
+          for (const log of receipt.logs) {
+            try {
+              const parsed = contestFactory.interface.parseLog({
+                topics: log.topics,
+                data: log.data
+              });
 
-            // Проверяем баланс USDC у создателя
-            const creatorBalance = await fixture.mockUSDC.balanceOf(fixture.creator1.address);
-            console.log(`Баланс USDC создателя: ${ethers.formatUnits(creatorBalance, 6)}`);
-
-            // Проверяем, одобрен ли токен для фабрики
-            const factoryAddress = await fixture.contestFactory.getAddress();
-            const allowance = await fixture.mockUSDC.allowance(fixture.creator1.address, factoryAddress);
-            console.log(`Текущее одобрение USDC: ${ethers.formatUnits(allowance, 6)}`);
-
-            // Если одобрения нет, делаем его
-            if (allowance < ethers.parseUnits("1000", 6)) {
-                await fixture.mockUSDC.connect(fixture.creator1).approve(
-                    factoryAddress,
-                    ethers.parseUnits("10000", 6)
-                );
-                console.log("Одобрение USDC выполнено");
+              if (parsed && parsed.name === "ContestCreated") {
+                contestId = parsed.args.contestId;
+                console.log(`✅ Конкурс создан: ID=${contestId}`);
+                break;
+              }
+            } catch (e) {
+              // Игнорируем ошибки парсинга
             }
+
 
             // Создаем конкурс с USDC
             const { contestId, escrow } = await createTestContest(
