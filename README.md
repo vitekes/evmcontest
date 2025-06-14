@@ -32,3 +32,4 @@ npm run test
 
 More documentation is available inside the [docs](docs/) directory in both Russian and English.
 Start exploring at docs/en/index.md (English) or docs/ru/index.md (Russian).
+

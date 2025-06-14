@@ -12,3 +12,4 @@ A typical contest lasts from several hours to several months. The minimum and ma
 During the active phase the creator can pause the contest if a problem occurs. When paused, no new winners can be declared until the creator resumes it.
 
 If the jury fails to declare winners before the end time, the creator may cancel the contest and withdraw the prize. Alternatively the factory owner can step in with an emergency withdrawal.
+

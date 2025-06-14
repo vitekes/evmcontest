@@ -12,7 +12,6 @@ Features:
 - Award active creators with NFT badges (`CreatorBadges`).
 - Manage additional prizes with `PrizeManager`.
 
-
 ## Key benefits
 
 - Fully on-chain prize accounting.
