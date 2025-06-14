@@ -109,5 +109,5 @@ await escrow.refund();
 - После вызова `declareWinners` вызов `refund` недоступен.
 - Следите за тем, чтобы сумма `amounts` в `declareWinners` соответствовала `prizeAmount` за вычетом комиссии.
 
-*Далее: *[*NetworkFeeManager*](networkFeeManager.md)
+*Далее: [*NetworkFeeManager*](networkFeeManager.md)*
 

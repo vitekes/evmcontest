@@ -102,5 +102,5 @@ function feeRecipient() external view returns (address);
 - Для распределения комиссий разных типов токенов (ETH и ERC-20) можно расширить контракт, добавив адрес токена-фии.
 - Задействуйте multisig-кошелёк для `feeRecipient` для повышения безопасности.
 
-*Далее: *[*TokenValidator*](tokenValidator.md)
+*Далее: [*TokenValidator*](tokenValidator.md)*
 

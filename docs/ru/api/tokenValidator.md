@@ -68,5 +68,5 @@ function allowlist(address token) external view returns (bool);
 - Перед созданием конкурса проверяйте валидность токена через `isValid`.
 - Регулярно обновляйте allowlist через multisig для повышения безопасности.
 
-*Далее: *[*PrizeTemplates*](prizeTemplates.md)
+*Далее: [*PrizeTemplates*](prizeTemplates.md)*
 

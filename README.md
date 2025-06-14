@@ -1,71 +1,73 @@
-# EVMContest
+# evmcontest
 
-EVMContest is a toolkit for launching prize competitions on any EVM compatible
-network. It bundles a factory for deploying contest escrows, flexible fee
-management, token validation and optional modules such as NFT badges and a prize
-manager.
+**A platform for organizing prize contests on EVM networks**
 
-The goal is to provide a ready-made component that any DApp can plug into. The system records every contest, collects usage statistics and lets communities reward creators with NFT achievements. Its modular design lets you use only the parts you need or extend the contracts with new features.
+## What is evmcontest?
 
-The contracts can be integrated into any DApp or backend to launch contests, hold prizes securely and distribute rewards once a jury reaches a decision.
+**evmcontest** is a suite of smart contracts and utilities designed for rapid and secure integration of contest mechanics into any Ethereum Virtual Machine (EVM)–based decentralized project.
 
-* **ContestFactory** – deploys and controls escrows for each contest.
-* **ContestEscrow** – holds prizes and manages winners.
-* **NetworkFeeManager** – calculates and collects network fees.
-* **TokenValidator** – validates ERC‑20 tokens used in contests.
-* **PrizeManager** – keeps track of non‑monetary prizes.
-* **CreatorBadges** – ERC‑721 badges for active contest creators.
-* **PrizeTemplates** – helper library with common prize distributions.
-* 
-Contest metadata such as an IPFS description is passed via `contestMetadata` when creating a contest. The string is stored in each escrow and in `PrizeManager` so front ends can display details.
+### Why use it?
 
+- **Development speed**: Get a ready-made contest factory and escrow contracts instead of rolling your own logic.
+- **Security**: Auditable modular contracts based on best practices.
+- **Flexibility**: Configurable prize distribution templates, support for ERC-20 and ETH, extendable for NFTs and other assets.
 
-## Getting started
+### Use cases
 
-```bash
-npm install
-```
+- Organizing bounty programs
+- Hosting tournaments and competitions with prize pools
+- Decentralized auctions and gamification
+- Any scenario requiring guaranteed custody and distribution of prizes
 
-To run a local Hardhat node and deploy the core contracts:
+## Key features
 
-```bash
-npx hardhat node &
-npm run deploy:local
-```
+- **ContestFactory** — create and manage contests
+- **ContestEscrow** — isolated escrow for prize funds and winner distribution
+- **NetworkFeeManager** — configure and collect platform fees
+- **TokenValidator** — allowlist/blocklist ERC-20 tokens
+- **PrizeTemplates** & **PrizeManager** — built-in distribution templates and NFT prize support
+- **CreatorBadges** — award badges to contest organizers
 
-Tests can be executed with:
+## Quick Start
 
-```bash
-npm run test
-```
+1. Clone the repository and install dependencies:
+   ```bash
+   git clone https://github.com/vitekes/evmcontest.git
+   cd evmcontest
+   npm install
+   ```
+2. Create a `.env` file:
+   ```env
+   PRIVATE_KEY=your_private_key
+   RPC_URL=https://...
+   ```
+3. Launch a local network and deploy:
+   ```bash
+   npx hardhat node
+   npm run deploy:local
+   ```
+4. Run tests:
+   ```bash
+   npm run test
+   ```
 
-### Quick demo
+## Documentation
 
-Create a contest from a client application:
+For detailed information, see:
 
-```javascript
-const factory = await ethers.getContract('ContestFactory');
-await factory.createContest({
-  token: ethers.ZeroAddress,
-  totalPrize: ethers.parseEther('5'),
-  template: PrizeTemplates.PrizeTemplate.TOP_3,
-  customDistribution: [],
-  jury: [jury],
-  startTime: Math.floor(Date.now() / 1000),
-  endTime: Math.floor(Date.now() / 1000) + 3 * 86400,
-  contestMetadata: 'ipfs://Qm...'
-}, { value: ethers.parseEther('5.1') });
+- **Architecture**: `docs/architecture.md`
+- **API**: `docs/api/`
+- **Examples**: `docs/examples.md`
+- **Testing**: `docs/testing.md`
+- **Migrations & Deployment**: `docs/migrations.md`
+- **CHANGELOG**: `CHANGELOG.md`
 
-// later
-const escrow = await ethers.getContractAt('ContestEscrow', escrowAddress);
-await escrow.declareWinners([winner1, winner2, winner3], [1, 2, 3]);
-const params = await escrow.getContestParams();
-console.log(params.metadata);
-```
+## Contributing & Support
 
-Each winner then calls `claimPrize()` on the escrow to receive funds.
+- **GitHub Issues**: [https://github.com/vitekes/evmcontest/issues](https://github.com/vitekes/evmcontest/issues)
+- Pull requests are welcome!
 
-> Some networks require environment variables. Copy `env-example.js` to `.env` and fill in private keys and RPC URLs.
+## License
 
-More documentation is available inside the [docs](docs/) directory in both Russian and English.
-Start exploring at docs/en/index.md (English) or docs/ru/index.md (Russian).
+MIT License. © 2025 evmcontest team
+
