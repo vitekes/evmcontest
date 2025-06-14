@@ -44,6 +44,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     uint256 public constant MAX_CONTEST_DURATION = 270 days;
     uint256 public constant MIN_CONTEST_DURATION = 1 hours;
     uint256 public constant MAX_EMERGENCY_BATCH = 200;
+    uint256 private constant GAS_MARGIN = 50_000;
 
     /*───────────────────────────  EVENTS  ────────────────────────────────────*/
 
@@ -498,6 +499,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
         uint256 successCount = 0;
 
         for (uint256 i = 0; i < contestIds.length; i++) {
+            if (gasleft() < GAS_MARGIN) break;
             try this.getEscrowEmergencyInfo(contestIds[i]) returns (EmergencyInfo memory info) {
                 if (info.canEmergencyWithdraw) {
                     try IContestEscrow(info.escrowAddress).emergencyWithdraw(reason) {
