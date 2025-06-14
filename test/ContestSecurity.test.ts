@@ -47,6 +47,7 @@ describe("Security", function () {
     expect(balAfter).to.be.gt(balBefore);
     expect(await attacker.attacked()).to.be.true;
     expect(await escrow.hasClaimed(await attacker.getAddress())).to.be.true;
+
   });
 
   it("should restrict declareWinners to jury or creator", async function () {
