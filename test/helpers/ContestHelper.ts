@@ -9,18 +9,25 @@ import { TEST_CONSTANTS, CONTEST_TEMPLATES } from "../fixtures";
 import { prepareERC20Token } from "./TokenHelper";
 
 export interface CreateContestOptions {
+    /** Название конкурса (по умолчанию: 'Test Contest') */
+    name?: string;
+    /** Описание конкурса (по умолчанию: 'Test Description') */
+    description?: string;
+    /** Адрес токена для выплаты (по умолчанию: адрес нативной валюты 0x0) */
     token?: string;
+    /** Сумма призового фонда (по умолчанию: 1 ETH) */
     totalPrize?: bigint;
-    template?: number;
-    startDelay?: number;
-    duration?: number;
-    startTime?: bigint;    // Добавляем возможность указать конкретное время начала
-    endTime?: bigint;      // Добавляем возможность указать конкретное время окончания
-    jury?: string[];
-    metadata?: {
-        title?: string;
-        description?: string;
-    };
+    /** Срок подачи заявок в секундах (по умолчанию: 7 дней) */
+    submissionDeadline?: number;
+    /** Срок голосования в секундах (по умолчанию: 3 дня) */
+    votingDeadline?: number;
+    /** Минимальное количество членов жюри (по умолчанию: 3) */
+    minJurors?: number;
+    /** Массив адресов членов жюри (по умолчанию: пустой массив) */
+    jurors?: string[];
+    /** Комиссия платформы в процентах (по умолчанию: от NetworkFeeManager) */
+    platformFee?: number;
+    /** Наличие нематериальных призов (по умолчанию: false) */
     hasNonMonetaryPrizes?: boolean;
     uniqueId?: number;
     customDistribution?: Array<{
@@ -42,17 +49,18 @@ export async function createTestContest(
     transaction: any;
     receipt: NonNullable<Awaited<ReturnType<typeof ethers.ContractTransactionResponse.prototype.wait>>>;
 }> {
-    // Проверяем, что функция lastId доступна
-    let hasLastIdFunction;
-    let initialLastId = BigInt(0);
-    try {
-        initialLastId = await contestFactory.lastId();
-        console.log(`Начальное значение lastId перед созданием конкурса: ${initialLastId}`);
-        hasLastIdFunction = true;
-    } catch (error) {
-        console.warn(`Функция lastId недоступна: ${error}`);
-        hasLastIdFunction = false;
-    }
+    // Устанавливаем значения по умолчанию
+    const name = options.name || 'Test Contest';
+    const description = options.description || 'Test Description';
+    const token = options.token || ethers.ZeroAddress;
+    const totalPrize = options.totalPrize || ethers.parseEther('1.0');
+    // Используем время блокчейна вместо Date.now() для избежания ошибки 'Start time in past'
+    const now = Math.floor(Date.now() / 1000) + 60; // Добавляем 60 секунд для надежности
+    const submissionDeadline = options.submissionDeadline || now + 7 * 24 * 60 * 60;
+    const votingDeadline = options.votingDeadline || submissionDeadline + 3 * 24 * 60 * 60;
+    const jurors = options.jurors || [];
+    const uniqueId = options.uniqueId || Math.floor(Math.random() * 1000000);
+    const hasNonMonetaryPrizes = options.hasNonMonetaryPrizes || false;
 
     // Проверяем валидность токена, если это не ETH
     if (options.token && options.token !== ethers.ZeroAddress) {
@@ -165,19 +173,22 @@ export async function createTestContest(
         customDistribution: options.customDistribution || []
     };
 
-    const contestParams = {
-        token: config.token,
-        totalPrize: config.totalPrize,
-        template: config.template,
-        customDistribution: config.customDistribution.length > 0 ? config.customDistribution : [],
-        jury: config.jury,
-        startTime: startTime,
-        endTime: endTime,
-        contestMetadata: JSON.stringify({
-            title: options.metadata?.title || `Test Contest #${uniqueId}`,
-            description: options.metadata?.description || `Test contest for automated testing (ID: ${uniqueId})`
-        }),
-        hasNonMonetaryPrizes: config.hasNonMonetaryPrizes
+    // Получаем текущее время блокчейна для более точного startTime
+    const blockNum = await ethers.provider.getBlockNumber();
+    const block = await ethers.provider.getBlock(blockNum);
+    const blockTime = block ? block.timestamp : Math.floor(Date.now() / 1000);
+
+    // Параметры для создания конкурса согласно CreateContestParamsStruct
+    const params = {
+        token: token, // Передаем адрес токена напрямую
+        totalPrize: totalPrize,
+        template: 4, // Используем CUSTOM template (enum PrizeTemplate.CUSTOM = 4)
+        customDistribution: distributionArray, // Массив PrizeDistributionStruct
+        jury: jurors,
+        startTime: blockTime + 120, // Добавляем 2 минуты к текущему времени блока
+        endTime: votingDeadline,
+        contestMetadata: JSON.stringify({ name, description, uniqueId }),
+        hasNonMonetaryPrizes: hasNonMonetaryPrizes
     };
 
     let createTx;
@@ -223,123 +234,19 @@ export async function createTestContest(
                 console.log(`   ℹ️ Токен уже в whitelist`);
             }
 
-            // Дополнительно проверяем и устанавливаем флаг стейблкоина если нужно
-            try {
-                // В TypeScript не видит метод isStablecoin, но он существует в контракте
-                // @ts-ignore: Property 'isStablecoin' does not exist on type 'TokenValidator'
-                // Используем метод isStablecoin из интерфейса ITokenValidator
-                const isStablecoin = await tokenValidator.isStablecoin(config.token);
-                if (!isStablecoin) {
-                    const [owner] = await ethers.getSigners();
+        // Проверяем баланс перед созданием конкурса
+        if (token === ethers.ZeroAddress) {
+            // Получаем текущую комиссию сети
+            const networkFee = await feeManager.networkFees(31337); // hardhat chainId
+            console.log(`Комиссия сети: ${networkFee} базисных пунктов`);
 
-                    // Получаем символ токена через getContractAt вместо IERC20Metadata
-                    const mockToken = await ethers.getContractAt("MockERC20", config.token);
-                    const tokenSymbol = await mockToken.symbol();
+            // Рассчитываем комиссию (fee = prize * feeRate / 10000)
+            const platformFee = totalPrize * BigInt(networkFee) / 10000n;
+            const totalRequired = totalPrize + platformFee;
 
-                    // Проверяем, является ли токен потенциальным стейблкоином по имени
-                    const stablecoinSymbols = ['USDT', 'USDC', 'BUSD', 'DAI'];
-                    const isStablecoinSymbol = stablecoinSymbols.includes(tokenSymbol) || 
-                                             tokenSymbol.startsWith('USD');
-
-                    if (isStablecoinSymbol) {
-                        // Пробуем разные методы для установки стейблкоина
-                        try {
-                            // Пробуем получить тип контракта для определения доступных методов
-                            // @ts-ignore: Игнорируем ошибку, так как метод может быть доступен в реализации
-                            const isMock = await tokenValidator.isMockTokenValidator?.().catch(() => false);
-
-                            if (isMock) {
-                                // Если это мок, используем метод setupToken
-                                const mockValidator = await ethers.getContractAt("MockTokenValidator", await tokenValidator.getAddress());
-                                await mockValidator.connect(owner).setupToken(
-                                    config.token,
-                                    await mockToken.name(),
-                                    tokenSymbol,
-                                    await mockToken.decimals(),
-                                    ethers.parseUnits("1", 8), // $1 с 8 десятичными
-                                    true, // isStable = true
-                                    false  // isWrappedNative = false
-                                );
-                            } else {
-                                // Для реального валидатора
-                                await tokenValidator.connect(owner).setTokenIsStablecoin(config.token, true);
-                            }
-                            console.log(`   ✅ Токен установлен как стейблкоин`);
-                        } catch (error) {
-                            console.log(`   ⚠️ Ошибка при установке стейблкоина: ${error}`);
-
-                            // Добавляем в массив стейблкоинов напрямую, если это возможно
-                            try {
-                                const stablecoinsField = await tokenValidator.getStablecoins().catch(() => []);
-                                if (Array.isArray(stablecoinsField)) {
-                                    // @ts-ignore: Игнорируем ошибку, так как метод может быть доступен в реализации
-                                    await tokenValidator.connect(owner).updateStablecoins?.([
-                                        ...stablecoinsField, config.token
-                                    ]);
-                                    console.log(`   ✅ Токен добавлен в массив стейблкоинов`);
-                                }
-                            } catch (updateError) {
-                                console.log(`   ⚠️ Невозможно обновить список стейблкоинов: ${updateError}`);
-                            }
-                        }
-                    } else {
-                        console.log(`   ℹ️ Токен ${tokenSymbol} не определен как стейблкоин по символу`);
-                    }
-                } else {
-                    console.log(`   ✅ Токен уже является стейблкоином`);
-                }
-            } catch (stablecoinError) {
-                console.log(`   ⚠️ Не удалось установить флаг стейблкоина: ${stablecoinError}`);
-            }
-        } catch (error) {
-            console.log(`   ⚠️ Не удалось добавить токен в whitelist: ${error}`);
-        }
-
-        await prepareERC20Token(
-            token,
-            tokenValidator,
-            creator,
-            totalRequired,
-            await contestFactory.getAddress()
-        );
-        
-        console.log(`Создание конкурса с токеном ${config.token}: приз=${config.totalPrize}, комиссия=${platformFee}, всего=${totalRequired}`);
-
-        // Проверяем, нужно ли передавать totalRequired при вызове createContest
-        // Если токен стейблкоин, то в смарт-контракте логика комиссии отличается
-        const isStablecoin = await tokenValidator.isStablecoin(config.token);
-        console.log(`Токен ${await token.symbol()} является стейблкоином: ${isStablecoin}`);
-
-        // Получаем и проверяем важные параметры токена
-        const tokenDecimals = await token.decimals();
-        const tokenName = await token.name();
-        const tokenSymbol = await token.symbol();
-        console.log(`Параметры токена: name=${tokenName}, symbol=${tokenSymbol}, decimals=${tokenDecimals}`);
-
-        try {
-            // Сначала пробуем оценить газ для операции
-            try {
-                const gasEstimate = await contestFactory.connect(creator).createContest.estimateGas(contestParams);
-                console.log(`Оценка газа для createContest: ${gasEstimate} (добавим 30% запаса)`);                
-                const gasLimit = Math.ceil(Number(gasEstimate) * 1.3); // Добавляем 30% запаса
-
-                createTx = await contestFactory.connect(creator).createContest(contestParams, {
-                    gasLimit: gasLimit
-                });
-                console.log(`Транзакция отправлена с gasLimit: ${gasLimit}`);
-            } catch (gasError) {
-                console.warn(`Не удалось оценить газ: ${gasError}, используем фиксированное значение`);                
-
-                // Если не удалось оценить газ, используем увеличенный лимит
-                const gasLimit = 30000000; // Увеличиваем лимит газа еще больше
-                console.log(`Используем фиксированный gasLimit: ${gasLimit}`);
-
-                createTx = await contestFactory.connect(creator).createContest(contestParams, {
-                    gasLimit: gasLimit
-                });
-            }
-        } catch (error) {
-            console.error(`Ошибка при создании конкурса с токеном: ${error}`);
+            console.log(`Сумма приза: ${ethers.formatEther(totalPrize)} ETH`);
+            console.log(`Комиссия платформы: ${ethers.formatEther(platformFee)} ETH`);
+            console.log(`Всего требуется: ${ethers.formatEther(totalRequired)} ETH`);
 
             // Расширенная отладочная информация
             const err = error as any; // Явное приведение к any для доступа к свойствам
@@ -349,19 +256,25 @@ export async function createTestContest(
                     console.error(`Сообщение ошибки: ${err.message}`);
                 }
 
-                if ('code' in err) {
-                    console.error(`Код ошибки: ${err.code}`);
-                }
-
-                if ('transaction' in err) {
-                    console.error(`Данные транзакции: ${JSON.stringify(err.transaction)}`);
-                }
-
-                if ('receipt' in err) {
-                    console.error(`Чек транзакции: ${JSON.stringify(err.receipt)}`);
-                }
+            // Если конкурс с ETH, добавляем value при отправке транзакции с учетом комиссии
+            tx = await contestFactory.connect(creator).createContest(params, { value: totalRequired });
+        } else {
+            // Если конкурс с токеном ERC20
+            // Проверка существования токена
+            if (!token) {
+                throw new Error("Адрес токена не определен");
             }
 
+            // Проверяем одобрение токена
+            const tokenContract = await ethers.getContractAt("IERC20", token);
+            const allowance = await tokenContract.allowance(creator.address, await contestFactory.getAddress());
+
+            if (allowance < totalPrize) {
+                await tokenContract.connect(creator).approve(
+                    await contestFactory.getAddress(),
+                    totalPrize * 2n
+                );
+            }
             throw error;
         }
     }
@@ -747,6 +660,9 @@ export function generateTestWinners(count: number): string[] {
     return winners;
 }
 
-export { simulateContestEnd as endContest };
-export { generateTestJury as generateJury };
-export { generateTestWinners as generateWinners };
+export {
+    createTestContest as createContest,
+    simulateContestEnd as simulateContest,
+    generateTestJury as generateJury,
+    generateTestWinners as generateWinners
+};
