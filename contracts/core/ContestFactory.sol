@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
@@ -16,6 +17,8 @@ import "../interfaces/IContestEscrow.sol";
 
 contract ContestFactory is ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
+
+    bytes32 public constant EMERGENCY_ROLE = keccak256("EMERGENCY_ROLE");
 
     /*───────────────────────────  STORAGE  ───────────────────────────────────*/
 
@@ -35,6 +38,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     // Защита от спама
     mapping(address => uint256) public lastContestTime;
     uint256 public constant MIN_CONTEST_INTERVAL = 1 hours;
+    uint256 public constant TIME_BUFFER = 1 minutes;
 
     // Ограничения на время конкурса
     uint256 public constant MAX_CONTEST_DURATION = 270 days;
@@ -106,6 +110,15 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     event FactoryETHRecovered(uint256 amount);
     event FactoryTokenRecovered(address indexed token, uint256 amount);
 
+    /*───────────────────────────  ERRORS  ───────────────────────────────────*/
+
+    error WaitBetweenContests();
+    error StartTimeTooSoon();
+    error InvalidEmergencyAddress();
+    error EscrowNotFound();
+    error NoEthToRecover();
+    error NoTokensToRecover();
+
     /*───────────────────────────  STRUCTS  ───────────────────────────────────*/
 
     struct CreateContestParams {
@@ -168,10 +181,10 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     returns (address esc)
     {
         // Защита от спама
-        require(
-            block.timestamp >= lastContestTime[msg.sender] + MIN_CONTEST_INTERVAL,
-            "Wait between contests"
-        );
+        if (
+            block.timestamp + TIME_BUFFER <
+            lastContestTime[msg.sender] + MIN_CONTEST_INTERVAL
+        ) revert WaitBetweenContests();
         lastContestTime[msg.sender] = block.timestamp;
 
         // Проверяем что создатель не забанен
@@ -193,7 +206,7 @@ contract ContestFactory is ReentrancyGuard, Pausable {
 
         // Валидация базовых параметров
         require(params.totalPrize > 0, "Prize must be positive");
-        require(params.startTime >= block.timestamp, "Start time in past");
+        if (params.startTime < block.timestamp + TIME_BUFFER) revert StartTimeTooSoon();
         require(params.endTime > params.startTime, "Invalid end time");
 
         uint256 duration = params.endTime - params.startTime;
@@ -275,10 +288,9 @@ contract ContestFactory is ReentrancyGuard, Pausable {
             IContestEscrow(esc).init{value: params.totalPrize}(escrowParams);
             remainingValue -= params.totalPrize;
 
-            // 4. Безопасный возврат излишка с call()
+            // 4. Безопасный возврат излишка через Address.sendValue
             if (remainingValue > 0) {
-                (bool success, ) = payable(msg.sender).call{value: remainingValue}("");
-                require(success, "Excess refund failed");
+                Address.sendValue(payable(msg.sender), remainingValue);
                 emit ExcessRefunded(msg.sender, remainingValue);
             }
 
@@ -499,25 +511,18 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     onlyOwner
     {
         require(contestId < lastId, "Contest does not exist");
-        require(emergencyAddress != address(0), "Invalid emergency address");
+        if (emergencyAddress == address(0)) revert InvalidEmergencyAddress();
 
         address escrowAddr = escrows[contestId];
-        require(escrowAddr != address(0), "Escrow not found");
+        if (escrowAddr == address(0)) revert EscrowNotFound();
 
-        // Используем низкоуровневый вызов для совместимости
-        (bool success, ) = escrowAddr.call(
-            abi.encodeWithSignature(
-                "grantRole(bytes32,address)",
-                keccak256("EMERGENCY_ROLE"),
-                emergencyAddress
-            )
+        // Напрямую вызываем AccessControl для bubbling revert-ошибок
+        IAccessControl(escrowAddr).grantRole(
+            EMERGENCY_ROLE,
+            emergencyAddress
         );
 
-        if (success) {
-            emit EmergencyRoleGranted(contestId, escrowAddr, emergencyAddress);
-        } else {
-            revert("Failed to grant emergency role");
-        }
+        emit EmergencyRoleGranted(contestId, escrowAddr, emergencyAddress);
     }
 
     function revokeEmergencyRole(uint64 contestId, address emergencyAddress)
@@ -525,40 +530,32 @@ contract ContestFactory is ReentrancyGuard, Pausable {
     onlyOwner
     {
         require(contestId < lastId, "Contest does not exist");
-        require(emergencyAddress != address(0), "Invalid emergency address");
+        if (emergencyAddress == address(0)) revert InvalidEmergencyAddress();
 
         address escrowAddr = escrows[contestId];
-        require(escrowAddr != address(0), "Escrow not found");
+        if (escrowAddr == address(0)) revert EscrowNotFound();
 
-        // Используем низкоуровневый вызов для совместимости
-        (bool success, ) = escrowAddr.call(
-            abi.encodeWithSignature(
-                "revokeRole(bytes32,address)",
-                keccak256("EMERGENCY_ROLE"),
-                emergencyAddress
-            )
+        // Напрямую вызываем AccessControl для bubbling revert-ошибок
+        IAccessControl(escrowAddr).revokeRole(
+            EMERGENCY_ROLE,
+            emergencyAddress
         );
 
-        if (success) {
-            emit EmergencyRoleRevoked(contestId, escrowAddr, emergencyAddress);
-        } else {
-            revert("Failed to revoke emergency role");
-        }
+        emit EmergencyRoleRevoked(contestId, escrowAddr, emergencyAddress);
     }
 
     function recoverFactoryETH() external onlyOwner {
         uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to recover");
+        if (balance == 0) revert NoEthToRecover();
 
-        (bool success, ) = payable(owner).call{value: balance}("");
-        require(success, "ETH recovery failed");
+        Address.sendValue(payable(owner), balance);
 
         emit FactoryETHRecovered(balance);
     }
 
     function recoverFactoryTokens(IERC20 token) external onlyOwner {
         uint256 balance = token.balanceOf(address(this));
-        require(balance > 0, "No tokens to recover");
+        if (balance == 0) revert NoTokensToRecover();
 
         token.safeTransfer(owner, balance);
         emit FactoryTokenRecovered(address(token), balance);

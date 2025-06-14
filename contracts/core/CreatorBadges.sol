@@ -34,13 +34,21 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
     }
     
     struct BadgeInfo {
-        string name;
         string description;
         string imageUri;
         uint256 minContests;
         uint256 minVolume;
         bool isActive;
     }
+
+    // Badge names stored as bytes32 constants to avoid storage usage
+    bytes32 private constant NAME_FIRST_CONTEST = "First Contest Creator";
+    bytes32 private constant NAME_CONTEST_VETERAN = "Contest Veteran";
+    bytes32 private constant NAME_CONTEST_MASTER = "Contest Master";
+    bytes32 private constant NAME_BIG_SPENDER = "Big Spender";
+    bytes32 private constant NAME_WHALE = "Contest Whale";
+    bytes32 private constant NAME_VERIFIED_CREATOR = "Verified Creator";
+    bytes32 private constant NAME_EARLY_ADOPTER = "Early Adopter";
     
     // Типы бейджей
     uint256 public constant FIRST_CONTEST = 1;
@@ -154,12 +162,11 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         uint256 tokenId = _nextTokenId++;
         _mint(creator, tokenId);
         
-        emit BadgeEarned(creator, badgeId, tokenId, badgeInfo[badgeId].name);
+        emit BadgeEarned(creator, badgeId, tokenId, _badgeName(badgeId));
     }
-    
+
     function _initializeBadges() internal {
         badgeInfo[FIRST_CONTEST] = BadgeInfo({
-            name: "First Contest Creator",
             description: "Created your first contest! Welcome to the community!",
             imageUri: "ipfs://QmFirstContestBadge",
             minContests: 1,
@@ -168,7 +175,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[CONTEST_VETERAN] = BadgeInfo({
-            name: "Contest Veteran",
             description: "Created 10+ contests. You're getting the hang of this!",
             imageUri: "ipfs://QmVeteranBadge",
             minContests: 10,
@@ -177,7 +183,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[CONTEST_MASTER] = BadgeInfo({
-            name: "Contest Master",
             description: "Created 50+ contests. True contest creation master!",
             imageUri: "ipfs://QmMasterBadge",
             minContests: 50,
@@ -186,7 +191,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[BIG_SPENDER] = BadgeInfo({
-            name: "Big Spender",
             description: "Distributed $10,000+ in total prizes. Generous creator!",
             imageUri: "ipfs://QmBigSpenderBadge",
             minContests: 0,
@@ -195,7 +199,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[WHALE] = BadgeInfo({
-            name: "Contest Whale",
             description: "Distributed $100,000+ in total prizes. Legendary!",
             imageUri: "ipfs://QmWhaleBadge",
             minContests: 0,
@@ -204,7 +207,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[VERIFIED_CREATOR] = BadgeInfo({
-            name: "Verified Creator",
             description: "Verified by the platform. Trusted and authentic!",
             imageUri: "ipfs://QmVerifiedBadge",
             minContests: 0,
@@ -213,7 +215,6 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         });
         
         badgeInfo[EARLY_ADOPTER] = BadgeInfo({
-            name: "Early Adopter",
             description: "One of the first 100 contest creators. Pioneer!",
             imageUri: "ipfs://QmEarlyAdopterBadge",
             minContests: 1,
@@ -239,7 +240,7 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
         for (uint256 i = 1; i <= 7; i++) {
             if (hasBadge[creator][i]) {
                 tempBadges[count] = i;
-                tempNames[count] = badgeInfo[i].name;
+                tempNames[count] = _badgeName(i);
                 count++;
             }
         }
@@ -251,6 +252,29 @@ contract CreatorBadges is ERC721, ReentrancyGuard, Ownable {
             earnedBadges[i] = tempBadges[i];
             badgeNames[i] = tempNames[i];
         }
+    }
+
+    function _badgeName(uint256 badgeId) internal pure returns (string memory) {
+        if (badgeId == FIRST_CONTEST) return _bytes32ToString(NAME_FIRST_CONTEST);
+        if (badgeId == CONTEST_VETERAN) return _bytes32ToString(NAME_CONTEST_VETERAN);
+        if (badgeId == CONTEST_MASTER) return _bytes32ToString(NAME_CONTEST_MASTER);
+        if (badgeId == BIG_SPENDER) return _bytes32ToString(NAME_BIG_SPENDER);
+        if (badgeId == WHALE) return _bytes32ToString(NAME_WHALE);
+        if (badgeId == VERIFIED_CREATOR) return _bytes32ToString(NAME_VERIFIED_CREATOR);
+        if (badgeId == EARLY_ADOPTER) return _bytes32ToString(NAME_EARLY_ADOPTER);
+        return "";
+    }
+
+    function _bytes32ToString(bytes32 data) internal pure returns (string memory) {
+        uint256 len = 0;
+        while (len < 32 && data[len] != 0) {
+            len++;
+        }
+        bytes memory buffer = new bytes(len);
+        for (uint256 i = 0; i < len; i++) {
+            buffer[i] = data[i];
+        }
+        return string(buffer);
     }
     
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
