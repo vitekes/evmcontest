@@ -51,4 +51,9 @@ await factory.createContest({
 });
 ```
 
-Once winners are declared by the jury you can call `claimPrize` from the escrow contract to receive funds.
+After the contest ends a jury member declares the winners:
+```javascript
+const escrow = await ethers.getContractAt('ContestEscrow', escrowAddress);
+await escrow.declareWinners([winner1, winner2], [1, 2]);
+```
+Each winner then calls `claimPrize` on the escrow to receive funds.

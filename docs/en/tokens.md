@@ -19,4 +19,3 @@ validator.setWhitelist(tokens, true);
 ```
 
 Each token has cached metadata which can be updated off-chain using `updateTokenInfo` to store liquidity or price information.
-

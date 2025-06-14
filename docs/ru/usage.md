@@ -51,4 +51,9 @@ await factory.createContest({
 });
 ```
 
-После объявления победителей вызывайте `claimPrize` в эскроу, чтобы забрать награду.
+После окончания конкурса один из членов жюри объявляет победителей:
+```javascript
+const escrow = await ethers.getContractAt('ContestEscrow', escrowAddress);
+await escrow.declareWinners([winner1, winner2], [1, 2]);
+```
+Затем каждый победитель вызывает `claimPrize`, чтобы получить награду.
