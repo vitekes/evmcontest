@@ -207,6 +207,12 @@ describe("Contest Token Integration Tests", function() {
 
     expect(ethContestResult.contestId).to.be.gt(BigInt(0));
 
+    // Контракт ContestFactory требует паузы минимум 1 час между созданиями
+    // конкурсов одним и тем же адресом. Продвигаем время, чтобы избежать
+    // отката с ошибкой "Wait between contests" при создании следующего
+    // конкурса в рамках этого теста.
+    await time.increase(3600 + 1);
+
     // USDC конкурс
     console.log("💵 Создание конкурса с USDC");
     
@@ -474,11 +480,16 @@ describe("Contest Token Integration Tests", function() {
           description: "Testing fee calculation with ETH"
         }
       }
-    );
+      );
 
-    // Проверяем комиссию ETH
-    const availableETHFees = await networkFeeManager.getAvailableETHFees();
-    expect(availableETHFees).to.equal(ethFee);
+      // Проверяем комиссию ETH
+      const availableETHFees = await networkFeeManager.getAvailableETHFees();
+      expect(availableETHFees).to.equal(ethFee);
+
+      // Между созданием конкурсов должна пройти как минимум 1 час. Увеличиваем
+      // время, чтобы следующая транзакция не была отклонена проверкой
+      // `Wait between contests` в контракте ContestFactory.
+      await time.increase(3600 + 1);
 
     // USDT конкурс
     const usdtTotalPrize = ethers.parseUnits("1000", await mockUSDT.decimals());
