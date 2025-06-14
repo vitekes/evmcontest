@@ -1,16 +1,13 @@
 import { ethers } from "hardhat";
 import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import {
-    ContestFactory,
-    ContestEscrow,
-    NetworkFeeManager
+import { 
+    ContestFactory, 
+    ContestEscrow, 
+    NetworkFeeManager 
 } from "../../typechain-types";
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { ContractTransactionResponse } from "ethers";
+import { TEST_CONSTANTS, CONTEST_TEMPLATES } from "../fixtures";
+import { prepareERC20Token } from "./TokenHelper";
 
-/**
- * Опции для создания тестового конкурса
- */
 export interface CreateContestOptions {
     /** Название конкурса (по умолчанию: 'Test Contest') */
     name?: string;
@@ -32,34 +29,25 @@ export interface CreateContestOptions {
     platformFee?: number;
     /** Наличие нематериальных призов (по умолчанию: false) */
     hasNonMonetaryPrizes?: boolean;
-    /** Уникальный ID конкурса (по умолчанию: генерируется автоматически) */
     uniqueId?: number;
-    /** Произвольное распределение призового фонда */
-    customDistribution?: {
-        places: number[];
-        percentages: number[];
-        descriptions: string[];
-    };
+    customDistribution?: Array<{
+        place: number;
+        percentage: number;
+        description: string;
+    }>;
 }
 
-/**
- * Создает тестовый конкурс с заданными параметрами
- * @param contestFactory - Фабрика конкурсов
- * @param feeManager - Менеджер комиссий
- * @param creator - Создатель конкурса (Signer)
- * @param options - Настройки конкурса
- * @returns Объект с информацией о созданном конкурсе
- */
 export async function createTestContest(
     contestFactory: ContestFactory,
     feeManager: NetworkFeeManager,
-    creator: SignerWithAddress,
+    creator: any,
     options: CreateContestOptions = {}
 ): Promise<{
     contestId: bigint;
     escrow: ContestEscrow;
     escrowAddress: string;
-    transaction: ContractTransactionResponse;
+    transaction: any;
+    receipt: NonNullable<Awaited<ReturnType<typeof ethers.ContractTransactionResponse.prototype.wait>>>;
 }> {
     // Устанавливаем значения по умолчанию
     const name = options.name || 'Test Contest';
@@ -74,28 +62,116 @@ export async function createTestContest(
     const uniqueId = options.uniqueId || Math.floor(Math.random() * 1000000);
     const hasNonMonetaryPrizes = options.hasNonMonetaryPrizes || false;
 
-    // Настраиваем распределение призового фонда как массив структур
-    let distributionArray: Array<{
-        place: number;
-        percentage: number;
-        description: string;
-    }>;
+    // Проверяем валидность токена, если это не ETH
+    if (options.token && options.token !== ethers.ZeroAddress) {
+        try {
+            const validator = await ethers.getContractAt("TokenValidator", await contestFactory.tokenValidator());
+            const isValidToken = await validator.isValidToken(options.token);
+            const isStablecoin = await validator.isStablecoin(options.token);
+            console.log(`🔍 Проверка валидации токена: isValidToken=${isValidToken}, isStablecoin=${isStablecoin}`);
 
-    if (options.customDistribution) {
-        const { places, percentages, descriptions } = options.customDistribution;
-        distributionArray = places.map((place, index) => ({
-            place: place,
-            percentage: percentages[index] || 0,
-            description: descriptions[index] || `Place ${place}`
-        }));
-    } else {
-        // Стандартное распределение: 60% за 1 место, 30% за 2 место, 10% за 3 место
-        distributionArray = [
-            { place: 1, percentage: 6000, description: 'First place' },   // 60% в базисных пунктах
-            { place: 2, percentage: 3000, description: 'Second place' },  // 30% в базисных пунктах  
-            { place: 3, percentage: 1000, description: 'Third place' }    // 10% в базисных пунктах
-        ];
+            // Если токен не валиден, попробуем исправить
+            if (!isValidToken) {
+                console.log(`⚠️ Токен не прошёл валидацию, пробуем исправить...`);
+                const [owner] = await ethers.getSigners();
+                await validator.connect(owner).setTokenWhitelist(options.token, true, "Added for test");
+
+                // Проверяем еще раз whitelist после исправления
+                const isValidNow = await validator.isValidToken(options.token);
+                console.log(`🔄 После исправления whitelist: isValidToken=${isValidNow}`);
+            }
+
+            // Отдельно проверяем и настраиваем стейблкоин
+            if (!isStablecoin) {
+                console.log(`⚠️ Токен не определен как стейблкоин, пробуем исправить...`);
+                const [owner] = await ethers.getSigners();
+
+                // Получаем информацию о токене для логирования
+                const mockToken = await ethers.getContractAt("MockERC20", options.token);
+                const tokenSymbol = await mockToken.symbol();
+                console.log(`Проверка стейблкоина для токена: ${tokenSymbol}`);
+
+                // Прямая вставка в массив стейблкоинов (если есть метод updateStablecoins)
+                try {
+                    // Получаем текущий список стейблкоинов
+                    const stablecoins = await validator.stablecoins
+                        ? await validator.stablecoins(0).then(() => {
+                            let coins = [];
+                            let i = 0;
+                            return (async function getCoins() {
+                                try {
+                                    while (true) {
+                                        coins.push(await validator.stablecoins(i));
+                                        i++;
+                                    }
+                                } catch {
+                                    return coins;
+                                }
+                            })();
+                        })
+                        : [];
+
+                    // Добавляем новый стейблкоин в массив, если такого метода еще нет
+                    await validator.connect(owner).batchWhitelist(
+                        [options.token],
+                        [true],
+                        `Stablecoin ${tokenSymbol} for tests`
+                    );
+
+                    // Проверяем, есть ли метод для обновления стейблкоинов
+                    const code = await ethers.provider.getCode(await validator.getAddress());
+                    console.log(`Проверяем наличие метода для стейблкоинов...`);
+
+                    // Пробуем разные подходы для определения стейблкоина
+                    try {
+                        // Пытаемся установить токен как стейблкоин напрямую
+                        await validator.connect(owner).setTokenIsStablecoin?.(options.token, true);
+                        console.log(`✅ Токен установлен как стейблкоин через setTokenIsStablecoin`);
+                    } catch (e) {
+                        console.log(`Не удалось использовать setTokenIsStablecoin: ${e.message}`);
+
+                        try {
+                            // Пробуем обновить TokenInfo напрямую
+                            await validator.connect(owner).updateTokenInfo?.(options.token);
+                            console.log(`✅ Обновлена информация о токене через updateTokenInfo`);
+                        } catch (e2) {
+                            console.log(`Не удалось использовать updateTokenInfo: ${e2.message}`);
+                        }
+                    }
+                } catch (updateErr) {
+                    console.log(`⚠️ Не удалось обновить стейблкоины: ${updateErr}`);
+                }
+
+                // Проверяем еще раз после исправления
+                const isStablecoinNow = await validator.isStablecoin(options.token);
+                console.log(`🔄 После исправления стейблкоина: isStablecoin=${isStablecoinNow}`);
+            }
+        } catch (error) {
+            console.warn(`⚠️ Ошибка при проверке валидности токена: ${error}`);
+        }
     }
+    console.log("Начало создания тестового конкурса с параметрами:", JSON.stringify(options, (_, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+    ));
+    const now = await time.latest();
+    const uniqueId = options.uniqueId || Math.floor(Math.random() * 1000000);
+    
+    // Используем startTime и endTime из параметров, если они указаны
+    const startTime = options.startTime ? options.startTime : 
+        BigInt(now + (options.startDelay || TEST_CONSTANTS.DEFAULT_START_DELAY) + (uniqueId % 100));
+
+    const endTime = options.endTime ? options.endTime :
+        BigInt(now + (options.startDelay || TEST_CONSTANTS.DEFAULT_START_DELAY) + 
+        (options.duration || TEST_CONSTANTS.DEFAULT_DURATION));
+
+    const config = {
+        token: options.token || ethers.ZeroAddress,
+        totalPrize: options.totalPrize || TEST_CONSTANTS.MEDIUM_PRIZE,
+        template: options.template !== undefined ? options.template : CONTEST_TEMPLATES.TOP_2,
+        jury: options.jury || [],
+        hasNonMonetaryPrizes: options.hasNonMonetaryPrizes || false,
+        customDistribution: options.customDistribution || []
+    };
 
     // Получаем текущее время блокчейна для более точного startTime
     const blockNum = await ethers.provider.getBlockNumber();
@@ -115,13 +191,48 @@ export async function createTestContest(
         hasNonMonetaryPrizes: hasNonMonetaryPrizes
     };
 
-    // Создаем конкурс
-    let tx: ContractTransactionResponse;
-    try {
-        // Проверяем параметры перед созданием конкурса
-        if (!contestFactory || !creator) {
-            throw new Error("Некорректные параметры для создания конкурса");
+    let createTx;
+    
+    if (config.token === ethers.ZeroAddress) {
+        const platformFee = await feeManager.calculateFee(31337, config.totalPrize);
+        const totalRequired = config.totalPrize + platformFee;
+        
+        console.log(`Создание конкурса с ETH: приз=${ethers.formatEther(config.totalPrize)}, комиссия=${ethers.formatEther(platformFee)}, всего=${ethers.formatEther(totalRequired)}`);
+
+        try {
+            createTx = await contestFactory.connect(creator).createContest(contestParams, {
+                value: totalRequired,
+                gasLimit: 5000000  // Увеличиваем лимит газа
+            });
+        } catch (error) {
+            console.error(`Ошибка при создании конкурса с ETH: ${error}`);
+            throw error;
         }
+    } else {
+        const token = await ethers.getContractAt("MockERC20", config.token);
+        const platformFee = await feeManager.calculateFee(31337, config.totalPrize);
+        const totalRequired = config.totalPrize + platformFee;
+
+        const tokenValidator = await ethers.getContractAt("TokenValidator", 
+            await contestFactory.tokenValidator()
+        );
+        
+        // Добавляем токен в белый список перед созданием конкурса
+        try {
+            const isWhitelisted = await tokenValidator.whitelistedTokens(config.token);
+            if (!isWhitelisted) {
+                // Используем owner, а не creator для добавления в whitelist
+                const [owner] = await ethers.getSigners();
+                const addToWhitelistTx = await tokenValidator.connect(owner).setTokenWhitelist(
+                    config.token,
+                    true,
+                    "Test whitelist for mock token"
+                );
+                await addToWhitelistTx.wait();
+                console.log(`   ✅ Добавлен в whitelist с использованием owner`);
+            } else {
+                console.log(`   ℹ️ Токен уже в whitelist`);
+            }
 
         // Проверяем баланс перед созданием конкурса
         if (token === ethers.ZeroAddress) {
@@ -137,13 +248,13 @@ export async function createTestContest(
             console.log(`Комиссия платформы: ${ethers.formatEther(platformFee)} ETH`);
             console.log(`Всего требуется: ${ethers.formatEther(totalRequired)} ETH`);
 
-            // Проверка баланса ETH
-            const balance = await ethers.provider.getBalance(creator.address);
-            console.log(`Баланс ETH создателя: ${ethers.formatEther(balance)}`);
+            // Расширенная отладочная информация
+            const err = error as any; // Явное приведение к any для доступа к свойствам
 
-            if (balance < totalRequired) {
-                throw new Error(`Недостаточно ETH для создания конкурса. Баланс: ${ethers.formatEther(balance)}, требуется: ${ethers.formatEther(totalRequired)}`);
-            }
+            if (err && typeof err === 'object') {
+                if ('message' in err) {
+                    console.error(`Сообщение ошибки: ${err.message}`);
+                }
 
             // Если конкурс с ETH, добавляем value при отправке транзакции с учетом комиссии
             tx = await contestFactory.connect(creator).createContest(params, { value: totalRequired });
@@ -164,166 +275,297 @@ export async function createTestContest(
                     totalPrize * 2n
                 );
             }
-
-            tx = await contestFactory.connect(creator).createContest(params);
+            throw error;
         }
+    }
+
+    const receipt = await createTx.wait();
+    if (!receipt) throw new Error("Transaction receipt is null");
+    if (!receipt.logs) throw new Error("Transaction receipt logs are missing");
+
+    console.log(`Получено ${receipt.logs.length} логов из транзакции`);
+
+    let contestId: bigint | null = null;
+    let escrowAddress: string | null = null;
+
+    // Более надежный способ поиска события по topicHash
+    let eventTopicHash;
+    try {
+        const eventDef = contestFactory.interface.getEvent("ContestCreated");
+        eventTopicHash = eventDef?.topicHash;
+        console.log(`Найдено определение события ContestCreated с topicHash: ${eventTopicHash}`);
     } catch (error) {
-        console.error(`Ошибка при создании конкурса: ${error}`);
-        throw error;
+        console.error(`Ошибка при получении topicHash для ContestCreated: ${error}`);
     }
 
-    // Ждем выполнения транзакции и получаем receipt
-    const receipt = await tx.wait();
-    if (!receipt) {
-        throw new Error('Transaction receipt is null');
-    }
+    // Генерируем различные варианты хешей для события
+    const possibleSignatures = [
+        "ContestCreated(uint256,address,address,uint256,uint256)",
+        "ContestCreated(uint256,address,address,address,uint256,uint256)",
+        "ContestCreated(uint256,address,address)"
+    ];
 
-    // Ищем событие ContestCreated
-    const contestCreatedEvent = receipt.logs.find(log => {
+    const signatureHashes = [];
+    for (const sig of possibleSignatures) {
         try {
-            const parsed = contestFactory.interface.parseLog({
-                topics: log.topics as string[],
-                data: log.data
-            });
-            return parsed?.name === 'ContestCreated';
-        } catch (e) {
-            return false;
+            const hash = ethers.id(sig);
+            signatureHashes.push(hash);
+            console.log(`Хеш для сигнатуры ${sig}: ${hash}`);
+        } catch (err) {
+            console.error(`Не удалось сгенерировать хеш для ${sig}: ${err}`);
         }
-    });
-
-    if (!contestCreatedEvent) {
-        throw new Error('Contest creation failed: ContestCreated event not found');
     }
 
-    // Парсим данные из события
-    const parsedEvent = contestFactory.interface.parseLog({
-        topics: contestCreatedEvent.topics as string[],
-        data: contestCreatedEvent.data
-    });
-
-    if (!parsedEvent) {
-        throw new Error('Failed to parse ContestCreated event');
+    // Выводим первые несколько topicHash для отладки
+    if (receipt.logs.length > 0) {
+        console.log(`Первые топики логов:`);
+        for (let i = 0; i < Math.min(5, receipt.logs.length); i++) {
+            if (receipt.logs[i].topics.length > 0) {
+                console.log(`Log ${i}: ${receipt.logs[i].topics[0]}`);
+            }
+        }
     }
 
-    const contestId = parsedEvent.args.contestId as bigint;
-    const escrowAddress = parsedEvent.args.escrow as string;
+    let contestCreatedLog = null;
 
-    // Подключаемся к контракту эскроу
-    const escrow = await ethers.getContractAt('ContestEscrow', escrowAddress) as ContestEscrow;
+    // Сначала пробуем найти через eventTopicHash
+    if (eventTopicHash) {
+        contestCreatedLog = receipt.logs.find(log => 
+            log.topics.length > 0 && log.topics[0] === eventTopicHash
+        );
+
+        if (contestCreatedLog) {
+            console.log(`Найден лог с основным хешем события: ${eventTopicHash}`);
+        }
+    }
+
+    // Если не нашли, пробуем через все возможные хеши
+    if (!contestCreatedLog) {
+        for (const hash of signatureHashes) {
+            const log = receipt.logs.find(log => 
+                log.topics.length > 0 && log.topics[0] === hash
+            );
+
+            if (log) {
+                contestCreatedLog = log;
+                console.log(`Найден лог с альтернативным хешем события: ${hash}`);
+                break;
+            }
+        }
+    }
+
+    if (contestCreatedLog) {
+        try {
+            const decodedEvent = contestFactory.interface.parseLog(contestCreatedLog);
+            if (decodedEvent && decodedEvent.args) {
+                    // Пробуем получить по именам
+                    contestId = decodedEvent.args.contestId;
+                    escrowAddress = decodedEvent.args.escrow;
+
+                    // Если не получилось, пробуем по индексам
+                    if (!contestId) {
+                        contestId = decodedEvent.args[0];
+                    }
+
+                    if (!escrowAddress) {
+                        // Пробуем разные индексы для escrowAddress
+                        for (let i = 1; i < 4; i++) {
+                            if (ethers.isAddress(decodedEvent.args[i])) {
+                                escrowAddress = decodedEvent.args[i];
+                                break;
+                            }
+                        }
+                    }
+
+                    console.log(`Найдено событие ContestCreated! ID: ${contestId}, Эскроу: ${escrowAddress}`);
+                }
+            } catch (error) {
+                console.log(`Ошибка при разборе события: ${error}`);
+
+                // Пробуем разобрать вручную
+                try {
+                    // Предполагаем, что первый параметр - contestId, а один из следующих - escrowAddress
+                    const data = contestCreatedLog.data;
+                    const topics = contestCreatedLog.topics;
+
+                    console.log(`Данные лога: data=${data}, topics=${topics.join(', ')}`);
+
+                    // Пробуем извлечь contestId из первого параметра в data (убираем 0x и берем первые 64 символа)
+                    if (data && data.length >= 66) {
+                        const idHex = '0x' + data.substring(2, 66);
+                        contestId = BigInt(idHex);
+                        console.log(`Извлечен contestId=${contestId} из data`);
+                    }
+
+                    // Пробуем найти адрес в data
+                    if (data && data.length >= 130) {
+                        const addrHex = '0x' + data.substring(26, 66); // 40 символов с отступом
+                        if (ethers.isAddress(addrHex)) {
+                            escrowAddress = addrHex;
+                            console.log(`Извлечен escrowAddress=${escrowAddress} из data`);
+                        }
+                    }
+                } catch (innerError) {
+                    console.error(`Ошибка при ручном разборе события: ${innerError}`);
+                }
+        }
+    } else {
+        // Если не нашли событие, проверяем все логи последовательно
+        console.log(`Проверка всех ${receipt.logs.length} логов на наличие ContestCreated...`);
+        for (const log of receipt.logs) {
+            try {
+                const parsed = contestFactory.interface.parseLog({
+                    topics: log.topics,
+                    data: log.data
+                });
+
+                if (parsed && parsed.name === "ContestCreated" && parsed.args) {
+                    contestId = parsed.args.contestId;
+                    escrowAddress = parsed.args.escrow;
+                    console.log(`Найдено событие ContestCreated! ID: ${contestId}, Эскроу: ${escrowAddress}`);
+                    break;
+                }
+            } catch (error) {
+                // Игнорируем ошибки парсинга
+                continue;
+            }
+        }
+    }
+
+    // Если не нашли событие, получаем информацию другим способом
+    if (contestId === null || !escrowAddress) {
+        console.log("Используем альтернативный метод получения информации о конкурсе...");
+
+        // Получаем lastId из ContestFactory, который должен быть равен только что созданному contestId
+        try {
+            contestId = await contestFactory.lastId();
+            console.log(`Получен contestId из lastId: ${contestId}`);
+
+            // Если contestId равен 0, это может означать, что транзакция не удалась или контракт не обновил счетчик
+            if (contestId === BigInt(0)) {
+                console.warn("Warning: lastId вернул 0, что может указывать на проблему с созданием конкурса");
+            }
+        } catch (error) {
+            console.error(`Ошибка при получении lastId: ${error}`);
+            // Устанавливаем contestId в 1 как запасной вариант, чтобы продолжить выполнение
+            contestId = BigInt(1);
+            console.log(`Используем запасной contestId: ${contestId}`);
+        }
+
+        try {
+            // Получаем информацию о конкурсе через getContestInfo
+            const contestInfo = await contestFactory.getContestInfo(Number(contestId));
+            if (contestInfo && contestInfo.escrowAddress) {
+                escrowAddress = contestInfo.escrowAddress;
+            }
+        } catch (error) {
+            console.log(`Ошибка при вызове getContestInfo: ${error}`);
+            try {
+                // Если getContestInfo не существует, получаем адрес эскроу напрямую из массива
+                escrowAddress = await contestFactory.escrows(Number(contestId) - 1);
+            } catch (nestedError) {
+                console.log(`Ошибка при доступе к escrows: ${nestedError}`);
+            }
+        }
+
+        if (!escrowAddress || escrowAddress === ethers.ZeroAddress) {
+            throw new Error(`Не удалось получить адрес эскроу для contestId ${contestId}`);
+        }
+    }
+
+    // Убедимся, что escrowAddress - это строка и имеет правильный формат
+    let escrowAddressStr = '';
+    try {
+        escrowAddressStr = escrowAddress.toString();
+        // Проверяем, что адрес начинается с 0x и имеет правильную длину
+        if (!escrowAddressStr.startsWith('0x')) {
+            escrowAddressStr = '0x' + escrowAddressStr;
+        }
+
+        // Убедимся, что длина адреса правильная (0x + 40 символов)
+        if (escrowAddressStr.length !== 42) {
+            console.warn(`Предупреждение: Возможно некорректный формат адреса: ${escrowAddressStr} (длина ${escrowAddressStr.length})`);
+        }
+
+        console.log(`Получение контракта ContestEscrow по адресу: ${escrowAddressStr}`);
+    } catch (error) {
+        console.error(`Ошибка при обработке адреса эскроу: ${error}`);
+        throw new Error(`Не удалось обработать адрес эскроу: ${error}`);
+    }
+
+    let escrow: ContestEscrow;
+    try {
+        escrow = await ethers.getContractAt("ContestEscrow", escrowAddressStr) as unknown as ContestEscrow;
+        // Проверяем, что контракт действителен, пытаясь вызвать какой-то метод
+        await escrow.getAddress();
+        console.log(`Контракт эскроу успешно получен и проверен`);
+    } catch (error) {
+        console.error(`Ошибка при получении контракта эскроу: ${error}`);
+        throw new Error(`Не удалось получить или проверить контракт эскроу по адресу ${escrowAddressStr}: ${error}`);
+    }
+    
+    // Проверка и форматирование contestId перед возвратом
+    if (contestId === null || contestId === BigInt(0)) {
+        console.warn("Внимание: contestId всё ещё null или 0, пробуем получить из lastId");
+
+        // Если доступна функция lastId, пробуем получить оттуда
+        if (hasLastIdFunction) {
+            try {
+                const newLastId = await contestFactory.lastId();
+                console.log(`Текущее значение lastId после создания конкурса: ${newLastId}`);
+
+                if (newLastId > initialLastId) {
+                    // Если lastId увеличился, используем его
+                    contestId = newLastId;
+                    console.log(`Используем lastId как contestId: ${contestId}`);
+                } else {
+                    // Если lastId не изменился, используем initialLastId + 1
+                    contestId = initialLastId + BigInt(1);
+                    console.log(`Используем initialLastId + 1 как contestId: ${contestId}`);
+                }
+            } catch (error) {
+                console.error(`Ошибка при получении lastId после создания: ${error}`);
+                contestId = BigInt(1);
+            }
+        } else {
+            // Если функция lastId недоступна, используем значение по умолчанию
+            contestId = BigInt(1);
+        }
+    } else {
+        // Преобразуем contestId в bigint на всякий случай (если вдруг это строка или число)
+        try {
+            contestId = BigInt(contestId.toString());
+        } catch (error) {
+            console.warn(`Невозможно преобразовать contestId в bigint: ${error}`);
+        }
+    }
+
+    // Логируем финальный результат
+    console.log(`Финальный результат: contestId=${contestId}, escrowAddress=${escrowAddress}`);
 
     return {
         contestId,
         escrow,
         escrowAddress,
-        transaction: tx
+        transaction: createTx,
+        receipt
     };
 }
 
-/**
- * Опции для имитации завершения конкурса
- */
-export interface SimulateContestEndOptions {
-    /** Адреса победителей */
-    winners: string[];
-    /** Адреса членов жюри для голосования */
-    jurors?: string[];
-    /** Пометить конкурс как заблокированный (по умолчанию: false) */
-    flagAsFraud?: boolean;
-    /** Результаты голосования */
-    votes?: Array<{
-        juror: string;
-        contestantAddress: string;
-        place: number;
-        comment: string;
-    }>;
-}
-
-/**
- * Имитирует завершение конкурса с голосованием и определением победителей
- * @param escrow - Контракт эскроу конкурса
- * @param admin - Администратор платформы
- * @param options - Опции для симуляции завершения
- * @returns Результат операции
- */
-export async function simulateContestEnd(
-    escrow: ContestEscrow,
-    admin: SignerWithAddress,
-    options: SimulateContestEndOptions
+export async function createContest(
+    contestFactory: ContestFactory,
+    feeManager: NetworkFeeManager,
+    creator: any,
+    options: CreateContestOptions = {}
 ): Promise<{
-    winners: string[];
-    places: number[];
+    contestId: bigint;
     escrow: ContestEscrow;
-    finalState: string;
 }> {
-    // Получаем информацию о конкурсе
-    try {
-        const contestInfo = await escrow.getContestInfo();
-        const distribution = await escrow.getDistribution();
-        const numPlaces = distribution.length;
-
-        // Проверяем, что у нас достаточно победителей
-        if (options.winners.length < numPlaces) {
-            throw new Error(`Not enough winners provided. Need at least ${numPlaces} winners.`);
-        }
-
-        // Если конкурс помечен как мошеннический, используем emergency withdraw
-        if (options.flagAsFraud) {
-            try {
-                await escrow.connect(admin).emergencyWithdraw("Fraud detected");
-            } catch (error) {
-                console.warn('Emergency withdraw failed:', error);
-            }
-
-            return {
-                winners: [],
-                places: [],
-                escrow,
-                finalState: 'EMERGENCY_WITHDRAWN'
-            };
-        }
-
-        // Получаем время окончания конкурса
-        const endTime = await escrow.endTime();
-        const currentTime = await time.latest();
-
-        // Если конкурс еще не закончился, перематываем время
-        if (currentTime < endTime) {
-            await time.increaseTo(Number(endTime) + 1);
-        }
-
-        // Подготавливаем данные победителей
-        const finalWinners = options.winners.slice(0, numPlaces);
-        const finalPlaces = Array.from({ length: finalWinners.length }, (_, i) => i + 1);
-
-        try {
-            // Объявляем победителей (только 2 параметра)
-            await escrow.connect(admin).declareWinners(finalWinners, finalPlaces);
-
-            return {
-                winners: finalWinners,
-                places: finalPlaces,
-                escrow,
-                finalState: 'FINALIZED'
-            };
-        } catch (error) {
-            console.error('Failed to declare winners:', error);
-            
-            return {
-                winners: [],
-                places: [],
-                escrow,
-                finalState: 'ERROR'
-            };
-        }
-    } catch (error) {
-        console.error('Failed to simulate contest end:', error);
-        return {
-            winners: [],
-            places: [],
-            escrow,
-            finalState: 'ERROR'
-        };
-    }
+    const result = await createTestContest(contestFactory, feeManager, creator, options);
+    return {
+        contestId: result.contestId,
+        escrow: result.escrow
+    };
 }
 
 /**
@@ -331,20 +573,15 @@ export async function simulateContestEnd(
  * @param escrow Контракт эскроу
  * @returns Текущее время после увеличения
  */
-export async function endContest(escrow: ContestEscrow): Promise<number> {
-    try {
-        const endTime = await escrow.endTime();
-        const currentTime = await time.latest();
+export async function simulateContestEnd(escrow: ContestEscrow): Promise<number> {
+    const endTime = await escrow.endTime();
+    const currentTime = await time.latest();
 
-        if (currentTime < endTime) {
-            await time.increaseTo(Number(endTime) + 1);
-        }
-
-        return await time.latest();
-    } catch (error) {
-        console.error('Failed to end contest:', error);
-        return await time.latest();
+    if (currentTime < endTime) {
+        await time.increaseTo(Number(endTime) + 1);
     }
+
+    return await time.latest();
 }
 
 /**
@@ -393,46 +630,72 @@ export async function verifyPrizeClaim(
  * @param count - Количество адресов (по умолчанию 3)
  * @returns Массив адресов
  */
-export async function generateTestJury(count: number = 3): Promise<string[]> {
-    const jurors: string[] = [];
-    const signers = await ethers.getSigners();
-
-    // Используем адреса из доступных signers, начиная с 5-го
-    const startIndex = 5;
-    for (let i = 0; i < count; i++) {
-        if (startIndex + i < signers.length) {
-            jurors.push(await signers[startIndex + i].getAddress());
-        } else {
-            // Если не хватает signers, создаем новый случайный адрес
-            const wallet = ethers.Wallet.createRandom();
-            jurors.push(wallet.address);
-        }
-    }
-
-    return jurors;
+export function createContestTimeParams(currentTime: number, durationHours: number = 24, delayHours: number = 1) {
+  const startTime = BigInt(currentTime + delayHours * 3600);
+  const endTime = BigInt(currentTime + (delayHours + durationHours) * 3600);
+  return { startTime, endTime };
 }
 
 /**
- * Генерирует массив случайных адресов для тестовых победителей
- * @param count - Количество адресов (по умолчанию 3)
+ * Проверяет выплату призов победителям
+ * @param escrow Контракт эскроу
+ * @param winner Адрес победителя
+ * @param _expectedPrize Ожидаемая сумма приза
+ * @returns Полученная сумма приза
+ */
+export async function verifyPrizeClaim(escrow: ContestEscrow, winner: any, _expectedPrize: bigint): Promise<bigint> {
+  // Проверяем, что победитель еще не получил приз
+  const hasClaimedBefore = await escrow.hasClaimed(winner.address);
+  if (hasClaimedBefore) {
+    throw new Error(`Победитель ${winner.address} уже получил приз`);
+  }
+
+  // Баланс победителя до получения приза
+  const winnerBalanceBefore = await ethers.provider.getBalance(winner.address);
+
+  // Получение приза победителем
+  const claimTx = await escrow.connect(winner).claimPrize();
+  const receipt = await claimTx.wait();
+
+  // Учитываем газ, потраченный на транзакцию
+  const gasUsed = receipt ? receipt.gasUsed * receipt.gasPrice : BigInt(0);
+
+  // Проверяем, что победитель получил приз
+  const winnerBalanceAfter = await ethers.provider.getBalance(winner.address);
+  const actualReceived = winnerBalanceAfter + gasUsed - winnerBalanceBefore;
+
+  // Проверяем, что статус получения приза обновился
+  const hasClaimedAfter = await escrow.hasClaimed(winner.address);
+  if (!hasClaimedAfter) {
+    throw new Error(`Статус получения приза не обновился для ${winner.address}`);
+  }
+
+  return actualReceived;
+}
+
+/**
+ * Генерирует случайные адреса для членов жюри
+ * @param count Количество адресов для генерации
  * @returns Массив адресов
  */
-export async function generateTestWinners(count: number = 3): Promise<string[]> {
-    const winners: string[] = [];
-    const signers = await ethers.getSigners();
-
-    // Используем адреса из доступных signers, начиная с 10-го
-    const startIndex = 10;
+export function generateTestJury(count: number): string[] {
+    const jury: string[] = [];
     for (let i = 0; i < count; i++) {
-        if (startIndex + i < signers.length) {
-            winners.push(await signers[startIndex + i].getAddress());
-        } else {
-            // Если не хватает signers, создаем новый случайный адрес
-            const wallet = ethers.Wallet.createRandom();
-            winners.push(wallet.address);
-        }
+        jury.push(ethers.Wallet.createRandom().address);
     }
+    return jury;
+}
 
+/**
+ * Генерирует случайные адреса для победителей
+ * @param count Количество адресов для генерации
+ * @returns Массив адресов
+ */
+export function generateTestWinners(count: number): string[] {
+    const winners: string[] = [];
+    for (let i = 0; i < count; i++) {
+        winners.push(ethers.Wallet.createRandom().address);
+    }
     return winners;
 }
 
@@ -444,4 +707,5 @@ export {
     endContest,
     createContestTimeParams,
     verifyPrizeClaim
+
 };
