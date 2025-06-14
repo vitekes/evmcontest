@@ -5,6 +5,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const glob = require('glob');
 
 // Получаем аргументы командной строки
 const args = process.argv.slice(2);
@@ -120,9 +121,9 @@ function checkTestFiles(config) {
     }
 
     // Проверяем, что есть тестовые файлы
-    const glob = require('child_process').execSync(`ls ${config.pattern} 2>/dev/null || echo "NO_FILES"`, {encoding: 'utf8'}).trim();
-    
-    if (glob === 'NO_FILES' || glob === '') {
+    const files = glob.sync(config.pattern);
+
+    if (files.length === 0) {
         console.error(`❌ Тестовые файлы не найдены в: ${config.folder}`);
         console.log(`💡 Паттерн поиска: ${config.pattern}`);
         return false;
@@ -214,7 +215,8 @@ try {
     
     // ИСПРАВЛЕНО: Используем паттерн файлов вместо папки для обычных тестов
     const command = 'npx';
-    const baseArgs = ['hardhat', 'test', config.pattern]; // Используем pattern вместо folder
+    const files = glob.sync(config.pattern);
+    const baseArgs = ['hardhat', 'test', ...files];
     const finalArgs = [...baseArgs, ...additionalArgs];
     
     console.log(`🚀 Команда: ${command} ${finalArgs.join(' ')}\n`);
