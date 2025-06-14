@@ -593,8 +593,9 @@ export async function createTestContest(
     }
     
     // Проверка и форматирование contestId перед возвратом
-    if (contestId === null || contestId === BigInt(0)) {
-        console.warn("Внимание: contestId всё ещё null или 0, пробуем получить из lastId");
+    // Если не удалось извлечь contestId из событий
+    if (contestId === null) {
+        console.warn("Внимание: contestId не получен из логов, пробуем получить из lastId");
 
         // Если доступна функция lastId, пробуем получить оттуда
         if (hasLastIdFunction) {

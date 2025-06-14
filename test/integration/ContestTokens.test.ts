@@ -213,11 +213,9 @@ describe("Contest Token Integration Tests", function() {
     // конкурса в рамках этого теста.
     await time.increase(3600 + 1);
 
-    // Контракт ContestFactory требует паузы минимум 1 час между созданиями
-    // конкурсов одним и тем же адресом. Продвигаем время, чтобы избежать
-    // отката с ошибкой "Wait between contests" при создании следующего
-    // конкурса в рамках этого теста.
-    await time.increase(3600 + 1);
+    // Обновляем текущее время после увеличения, чтобы следующий конкурс
+    // имел корректные параметры времени относительно нового блока.
+    const timeAfterEth = await time.latest();
 
     // USDC конкурс
     console.log("💵 Создание конкурса с USDC");
@@ -288,7 +286,7 @@ describe("Contest Token Integration Tests", function() {
     await mockUSDC.connect(creator).approve(await contestFactory.getAddress(), ethers.parseUnits("1000", await mockUSDC.decimals()));
     console.log(`Новое разрешение USDC: ${await mockUSDC.allowance(creator.address, await contestFactory.getAddress())}`);
 
-    const {startTime: usdcStartTime, endTime: usdcEndTime} = createContestTimeParams(currentTime, 72, 2);
+    const {startTime: usdcStartTime, endTime: usdcEndTime} = createContestTimeParams(timeAfterEth, 72, 2);
 
     // Объявляем переменную вне блока try
     let usdcContestResult;
@@ -477,10 +475,15 @@ describe("Contest Token Integration Tests", function() {
       // `Wait between contests` в контракте ContestFactory.
       await time.increase(3600 + 1);
 
+      // Обновляем время после паузы, чтобы следующий конкурс имел
+      // корректные временные параметры.
+      const afterEthFeeTime = await time.latest();
+
+
     // USDT конкурс
     const usdtTotalPrize = ethers.parseUnits("1000", await mockUSDT.decimals());
     const usdtFee = await networkFeeManager.calculateFee(31337, usdtTotalPrize);
-    const {startTime: usdtStartTime, endTime: usdtEndTime} = createContestTimeParams(currentTime, 24, 2);
+    const {startTime: usdtStartTime, endTime: usdtEndTime} = createContestTimeParams(afterEthFeeTime, 24, 2);
 
     await createTestContest(
       contestFactory,
