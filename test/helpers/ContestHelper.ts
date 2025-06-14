@@ -593,8 +593,9 @@ export async function createTestContest(
     }
     
     // Проверка и форматирование contestId перед возвратом
-    if (contestId === null || contestId === BigInt(0)) {
-        console.warn("Внимание: contestId всё ещё null или 0, пробуем получить из lastId");
+    // Если не удалось извлечь contestId из событий
+    if (contestId === null) {
+        console.warn("Внимание: contestId не получен из логов, пробуем получить из lastId");
 
         // Если доступна функция lastId, пробуем получить оттуда
         if (hasLastIdFunction) {
@@ -603,13 +604,15 @@ export async function createTestContest(
                 console.log(`Текущее значение lastId после создания конкурса: ${newLastId}`);
 
                 if (newLastId > initialLastId) {
-                    // Если lastId увеличился, используем его
-                    contestId = newLastId;
-                    console.log(`Используем lastId как contestId: ${contestId}`);
+                    // Если lastId увеличился, то идентификатор конкурса равен
+                    // предыдущему значению lastId (newLastId - 1)
+                    contestId = newLastId - BigInt(1);
+                    console.log(`Используем lastId-1 как contestId: ${contestId}`);
                 } else {
-                    // Если lastId не изменился, используем initialLastId + 1
-                    contestId = initialLastId + BigInt(1);
-                    console.log(`Используем initialLastId + 1 как contestId: ${contestId}`);
+                    // Если lastId не изменился, используем initialLastId как
+                    // наиболее вероятный идентификатор
+                    contestId = initialLastId;
+                    console.log(`Используем initialLastId как contestId: ${contestId}`);
                 }
             } catch (error) {
                 console.error(`Ошибка при получении lastId после создания: ${error}`);

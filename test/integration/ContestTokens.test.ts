@@ -146,7 +146,7 @@ describe("Contest Token Integration Tests", function() {
     console.log(`Конкурс создан: ID=${contestId}, адрес эскроу=${escrowAddress}`);
 
     // Проверки
-    expect(contestId).to.be.gt(BigInt(0));
+    expect(contestId).to.be.gte(BigInt(0));
     expect(escrowAddress).to.not.equal(ethers.ZeroAddress);
 
     const escrowBalance = await mockUSDT.balanceOf(escrowAddress);
@@ -205,7 +205,17 @@ describe("Contest Token Integration Tests", function() {
       }
     );
 
-    expect(ethContestResult.contestId).to.be.gt(BigInt(0));
+    expect(ethContestResult.contestId).to.be.gte(BigInt(0));
+
+    // Контракт ContestFactory требует паузы минимум 1 час между созданиями
+    // конкурсов одним и тем же адресом. Продвигаем время, чтобы избежать
+    // отката с ошибкой "Wait between contests" при создании следующего
+    // конкурса в рамках этого теста.
+    await time.increase(3600 + 1);
+
+    // Обновляем текущее время после увеличения, чтобы следующий конкурс
+    // имел корректные параметры времени относительно нового блока.
+    const timeAfterEth = await time.latest();
 
     // USDC конкурс
     console.log("💵 Создание конкурса с USDC");
@@ -276,7 +286,7 @@ describe("Contest Token Integration Tests", function() {
     await mockUSDC.connect(creator).approve(await contestFactory.getAddress(), ethers.parseUnits("1000", await mockUSDC.decimals()));
     console.log(`Новое разрешение USDC: ${await mockUSDC.allowance(creator.address, await contestFactory.getAddress())}`);
 
-    const {startTime: usdcStartTime, endTime: usdcEndTime} = createContestTimeParams(currentTime, 72, 2);
+    const {startTime: usdcStartTime, endTime: usdcEndTime} = createContestTimeParams(timeAfterEth, 72, 2);
 
     // Объявляем переменную вне блока try
     let usdcContestResult;
@@ -335,36 +345,16 @@ describe("Contest Token Integration Tests", function() {
         const receipt = await tx.wait();
         console.log(`✅ Транзакция подтверждена: ${receipt?.hash || 'нет хеша'}`);
 
-        // Получаем ID конкурса из событий
-        let contestId;
-        if (receipt && receipt.logs) {
-          for (const log of receipt.logs) {
-            try {
-              const parsed = contestFactory.interface.parseLog({
-                topics: log.topics,
-                data: log.data
-              });
-
-              if (parsed && parsed.name === "ContestCreated") {
-                contestId = parsed.args.contestId;
-                console.log(`✅ Конкурс создан: ID=${contestId}`);
-                break;
-              }
-            } catch (e) {
-              // Игнорируем ошибки парсинга
-            }
-          }
-        }
-
-        if (!contestId) {
-          console.log("⚠️ Не удалось получить ID из событий, пробуем lastId");
-          const lastId = await contestFactory.lastId();
-          contestId = lastId;
-          console.log(`Используем lastId как contestId: ${contestId}`);
-        }
+        // Определяем contestId по последнему значению lastId после выполнения
+        // транзакции. lastId увеличивается постфиксно, поэтому он указывает на
+        // следующий свободный идентификатор. ID только что созданного конкурса
+        // равен lastId - 1.
+        const lastIdAfter = await contestFactory.lastId();
+        let contestId = lastIdAfter - BigInt(1);
+        console.log(`Используем lastId-1 как contestId: ${contestId}`);
 
         // Теперь получаем эскроу контракт
-        const escrowAddress = await contestFactory.escrows(Number(contestId) - 1);
+        const escrowAddress = await contestFactory.escrows(Number(contestId));
         const escrow = await ethers.getContractAt("ContestEscrow", escrowAddress);
 
         usdcContestResult = {
@@ -406,7 +396,7 @@ describe("Contest Token Integration Tests", function() {
       throw error; // Пробрасываем ошибку дальше для провала теста
     }
 
-    expect(usdcContestResult.contestId).to.be.gt(BigInt(0));
+    expect(usdcContestResult.contestId).to.be.gte(BigInt(0));
     expect(usdcContestResult.contestId).to.be.gt(ethContestResult.contestId);
 
     console.log("✅ Тест с различными токенами успешно завершен");
@@ -446,7 +436,7 @@ describe("Contest Token Integration Tests", function() {
       }
     );
 
-    expect(contestResult.contestId).to.be.gt(BigInt(0));
+    expect(contestResult.contestId).to.be.gte(BigInt(0));
     console.log("✅ Тест валидации токенов успешно завершен");
   });
 
@@ -474,16 +464,25 @@ describe("Contest Token Integration Tests", function() {
           description: "Testing fee calculation with ETH"
         }
       }
-    );
+      );
 
-    // Проверяем комиссию ETH
-    const availableETHFees = await networkFeeManager.getAvailableETHFees();
-    expect(availableETHFees).to.equal(ethFee);
+      // Проверяем комиссию ETH
+      const availableETHFees = await networkFeeManager.getAvailableETHFees();
+      expect(availableETHFees).to.equal(ethFee);
+
+      // Между созданием конкурсов должна пройти как минимум 1 час. Увеличиваем
+      // время, чтобы следующая транзакция не была отклонена проверкой
+      // `Wait between contests` в контракте ContestFactory.
+      await time.increase(3600 + 1);
+
+      // Обновляем время после паузы, чтобы следующий конкурс имел
+      // корректные временные параметры.
+      const afterEthFeeTime = await time.latest();
 
     // USDT конкурс
     const usdtTotalPrize = ethers.parseUnits("1000", await mockUSDT.decimals());
     const usdtFee = await networkFeeManager.calculateFee(31337, usdtTotalPrize);
-    const {startTime: usdtStartTime, endTime: usdtEndTime} = createContestTimeParams(currentTime, 24, 2);
+    const {startTime: usdtStartTime, endTime: usdtEndTime} = createContestTimeParams(afterEthFeeTime, 24, 2);
 
     await createTestContest(
       contestFactory,
