@@ -14,13 +14,14 @@ export interface CreateContestOptions {
     template?: number;
     startDelay?: number;
     duration?: number;
-    startTime?: bigint;    // Добавляем возможность указать конкретное время начала
-    endTime?: bigint;      // Добавляем возможность указать конкретное время окончания
+    startTime?: bigint;    
+    endTime?: bigint;      
     jury?: string[];
     metadata?: {
         title?: string;
         description?: string;
     };
+
     hasNonMonetaryPrizes?: boolean;
     uniqueId?: number;
     customDistribution?: Array<{
@@ -222,7 +223,6 @@ export async function createTestContest(
             } else {
                 console.log(`   ℹ️ Токен уже в whitelist`);
             }
-
             // Дополнительно проверяем и устанавливаем флаг стейблкоина если нужно
             try {
                 // В TypeScript не видит метод isStablecoin, но он существует в контракте
@@ -340,6 +340,7 @@ export async function createTestContest(
             }
         } catch (error) {
             console.error(`Ошибка при создании конкурса с токеном: ${error}`);
+
 
             // Расширенная отладочная информация
             const err = error as any; // Явное приведение к any для доступа к свойствам
@@ -750,3 +751,4 @@ export function generateTestWinners(count: number): string[] {
 export { simulateContestEnd as endContest };
 export { generateTestJury as generateJury };
 export { generateTestWinners as generateWinners };
+

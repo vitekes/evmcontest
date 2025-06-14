@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
+
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import {
@@ -507,4 +508,5 @@ describe("Contest Token Integration Tests", function() {
 
     console.log("✅ Тест расчета комиссий успешно завершен");
   });
+
 });
