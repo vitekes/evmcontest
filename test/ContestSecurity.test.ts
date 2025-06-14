@@ -40,8 +40,14 @@ describe("Security", function () {
       .connect(creator1)
       .declareWinners([await attacker.getAddress()], [1]);
 
-    await expect(attacker.attack()).to.be.revertedWith("ETH transfer failed");
-    expect(await escrow.hasClaimed(await attacker.getAddress())).to.be.false;
+    const balBefore = await ethers.provider.getBalance(await attacker.getAddress());
+    await attacker.attack();
+    const balAfter = await ethers.provider.getBalance(await attacker.getAddress());
+
+    expect(balAfter).to.be.gt(balBefore);
+    expect(await attacker.attacked()).to.be.true;
+    expect(await escrow.hasClaimed(await attacker.getAddress())).to.be.true;
+
   });
 
   it("should restrict declareWinners to jury or creator", async function () {

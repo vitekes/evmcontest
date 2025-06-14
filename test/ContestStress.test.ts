@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { deployFullPlatformFixture, TEST_CONSTANTS } from "./fixtures";
+import { deployFullPlatformFixture, TEST_CONSTANTS, CONTEST_TEMPLATES } from "./fixtures";
+import { time } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { createContest, endContest, generateWinners } from "./helpers";
 
 describe("Stress Testing", function () {
@@ -21,7 +22,7 @@ describe("Stress Testing", function () {
       contestFactory,
       feeManager,
       creator1,
-      { customDistribution: distribution, duration: 3600 }
+      { customDistribution: distribution, duration: 3600, template: CONTEST_TEMPLATES.CUSTOM }
     );
 
     await endContest(escrow);
@@ -70,6 +71,9 @@ describe("Stress Testing", function () {
     const initialId = await contestFactory.lastId();
     for (let i = 0; i < 5; i++) {
       await createContest(contestFactory, feeManager, creator1, { duration: 3600, uniqueId: i });
+      if (i < 4) {
+        await time.increase(3600);
+      }
     }
 
     expect(await contestFactory.lastId()).to.equal(initialId + BigInt(5));
