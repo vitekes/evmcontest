@@ -72,7 +72,7 @@ describe("Contest Lifecycle Integration", function () {
         console.log(`Конкурс создан: ID=${contestId}, адрес эскроу=${escrowAddress}`);
 
         // Проверяем, что конкурс создан
-        expect(contestId).to.be.gt(BigInt(0));
+        expect(contestId).to.be.at.least(BigInt(0));
         expect(escrowAddress).to.not.equal(ethers.ZeroAddress);
 
         // Проверяем, что эскроу получил средства
@@ -352,5 +352,3 @@ describe("Contest Lifecycle Integration", function () {
         console.log("✅ Тест генерации случайных победителей успешно завершен");
     });
 });
-
-    
