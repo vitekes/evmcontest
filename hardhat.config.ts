@@ -1,4 +1,6 @@
-import { HardhatUserConfig } from "hardhat/config";
+import { HardhatUserConfig, subtask } from "hardhat/config";
+import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from "hardhat/builtin-tasks/task-names";
+import path from "path";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomicfoundation/hardhat-ignition";
 import "@typechain/hardhat";
@@ -51,3 +53,14 @@ const config: HardhatUserConfig = {
 };
 
 export default config;
+
+// Use local solcjs to avoid network download
+subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD).setAction(async ({ solcVersion }) => {
+    const solcJsPath = path.join(__dirname, "node_modules", "solc", "soljson.js");
+    return {
+        compilerPath: solcJsPath,
+        isSolcJs: true,
+        version: solcVersion,
+        longVersion: solcVersion,
+    };
+});
