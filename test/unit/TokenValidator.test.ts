@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
-import { ethers } from "ethers";
+import { ethers } from "hardhat";
 import { deployTokenValidatorFixture } from "../fixtures";
 
 // Константа для нулевого адреса (аналог ethers.ZeroAddress)

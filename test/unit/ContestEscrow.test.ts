@@ -6,14 +6,13 @@ import {
     CONTEST_TEMPLATES, 
     deployFullPlatformFixture 
 } from "../fixtures";
-import { 
-    createTestContest, 
+import {
+    createTestContest,
     simulateContestEnd,
     expectETHBalanceChange,
-    expectTokenBalanceChange,
-    expectRevertWithReason,
-    expectRevertWithCustomError
+    expectTokenBalanceChange
 } from "../helpers";
+import { expectRevert } from "../helpers/EventsHelper";
 
 describe("ContestEscrow", function () {
     this.timeout(120000);
@@ -145,9 +144,10 @@ describe("ContestEscrow", function () {
                 { duration: 7200 }
             );
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.creator1).declareWinners([fixture.winner1.address], [1]),
-                "Contest still active"
+                escrow,
+                "ContestStillActive"
             );
         });
 
@@ -163,9 +163,10 @@ describe("ContestEscrow", function () {
 
             await simulateContestEnd(escrow);
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.participant1).declareWinners([fixture.winner1.address], [1]),
-                "Only jury or creator"
+                escrow,
+                "OnlyJuryOrCreator"
             );
         });
 
@@ -181,14 +182,16 @@ describe("ContestEscrow", function () {
 
             await simulateContestEnd(escrow);
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.creator1).declareWinners([fixture.winner1.address], [1, 2]),
-                "Mismatched arrays"
+                escrow,
+                "MismatchedArrays"
             );
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.creator1).declareWinners([fixture.winner1.address], [0]),
-                "Invalid place"
+                escrow,
+                "InvalidPlace"
             );
         });
     });
@@ -263,9 +266,10 @@ describe("ContestEscrow", function () {
             await escrow.connect(fixture.winner1).claimPrize();
 
             // Expect revert with specific reason on second claim attempt
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.winner1).claimPrize(),
-                "Already claimed"
+                escrow,
+                "AlreadyClaimed"
             );
         });
 
@@ -283,9 +287,10 @@ describe("ContestEscrow", function () {
             await escrow.connect(fixture.creator1)
                 .declareWinners([fixture.winner1.address], [1]);
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.participant1).claimPrize(),
-                "Not a winner"  // ✅ ИСПРАВЛЕНО: изменено сообщение ошибки
+                escrow,
+                "NotAWinner"  // ✅ ИСПРАВЛЕНО: изменено сообщение ошибки
             );
         });
     });
@@ -321,9 +326,10 @@ describe("ContestEscrow", function () {
                 { duration: 7200 }
             );
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.participant1).cancel("Unauthorized"),
-                "Only creator can call this"
+                escrow,
+                "OnlyCreator"
             );
         });
 
@@ -341,9 +347,10 @@ describe("ContestEscrow", function () {
             await escrow.connect(fixture.creator1)
                 .declareWinners([fixture.winner1.address], [1]);
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.creator1).cancel("Too late"),
-                "Contest already finalized"
+                escrow,
+                "ContestAlreadyFinalized"
             );
         });
     });
@@ -441,9 +448,10 @@ describe("ContestEscrow", function () {
             await simulateContestEnd(escrow);
             await time.increase(181 * 24 * 3600 + 1);
 
-            await expectRevertWithReason(
+            await expectRevert(
                 escrow.connect(fixture.creator1).emergencyWithdraw("Direct call"),
-                "Only factory can call this"
+                escrow,
+                "OnlyFactory"
             );
         });
     });
