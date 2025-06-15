@@ -2,8 +2,9 @@
 pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract PrizeManager {
+contract PrizeManager is ReentrancyGuard {
     /// @notice Distributes prize pool among winners or handles non-monetary rewards
     /// @param token Address of ERC20 prize token (or zero address for non-monetary)
     /// @param total Amount of prize pool (ignored for non-monetary)
@@ -17,7 +18,7 @@ contract PrizeManager {
         uint256 total,
         address[] calldata winners,
         uint8 mode
-    ) external {
+    ) external nonReentrant {
         require(winners.length > 0, "no winners");
 
         if (mode == 0) {

@@ -6,8 +6,9 @@ import "./MultiValidator.sol";
 import "./CoreFeeManager.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract PaymentGateway {
+contract PaymentGateway is ReentrancyGuard {
     using Address for address payable;
 
     AccessControlCenter public access;
@@ -47,7 +48,7 @@ contract PaymentGateway {
         address token,
         address payer,
         uint256 amount
-    ) external onlyFeatureOwner returns (uint256 netAmount) {
+    ) external onlyFeatureOwner nonReentrant returns (uint256 netAmount) {
         require(validator.isTokenAllowed(ctx, token), "token not allowed");
 
         // Сбор комиссии (может быть 0)

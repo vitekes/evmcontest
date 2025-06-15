@@ -4,8 +4,9 @@ pragma solidity ^0.8.30;
 import "./AccessControlCenter.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract CoreFeeManager {
+contract CoreFeeManager is ReentrancyGuard {
     using Address for address payable;
 
     AccessControlCenter public access;
@@ -41,7 +42,7 @@ contract CoreFeeManager {
         owner = msg.sender;
     }
 
-    function collect(uint8 ctx, address token, address payer, uint256 amount) external onlyFeatureOwner returns (uint256 feeAmount) {
+    function collect(uint8 ctx, address token, address payer, uint256 amount) external onlyFeatureOwner nonReentrant returns (uint256 feeAmount) {
         if (isZeroFeeAddress[ctx][payer]) return 0;
 
         uint16 pFee = percentFee[ctx][token];
@@ -55,7 +56,7 @@ contract CoreFeeManager {
         }
     }
 
-    function withdrawFees(uint8 ctx, address token, address to) external onlyAdmin {
+    function withdrawFees(uint8 ctx, address token, address to) external onlyAdmin nonReentrant {
         uint256 amount = collectedFees[ctx][token];
         require(amount > 0, "nothing to withdraw");
 

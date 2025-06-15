@@ -2,11 +2,12 @@
 pragma solidity ^0.8.30;
 
 import "../../core/Registry.sol";
+import "../../shared/NFTManager.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../../shared/NFTManager.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract ContestEscrow is Ownable {
+contract ContestEscrow is Ownable, ReentrancyGuard {
     Registry public registry;
     address public creator;
     address public paymentToken;
@@ -54,7 +55,7 @@ contract ContestEscrow is Ownable {
         emit Participated(msg.sender);
     }
 
-    function finalize(address[] calldata _winners) external onlyCreator {
+    function finalize(address[] calldata _winners) external onlyCreator nonReentrant {
         require(!isFinalized, "already finalized");
         require(_winners.length == winnersCount, "wrong winners count");
 
